@@ -24,16 +24,16 @@ Create these **repository variables** (Settings → Secrets and variables → Ac
 | `AWS_REGION` | `us-east-1` |
 | `TF_STATE_BUCKET` | `banking-platform-tfstate-<acct>` |
 | `TF_LOCK_TABLE` | `banking-platform-tf-locks` |
-| `SLACK_WEBHOOK_CONFIGURED` | `true` (optional) |
+| `TEAMS_WEBHOOK_CONFIGURED` | `true` (optional) |
 
-Secrets: `SLACK_WEBHOOK_URL` (optional). Create GitHub **Environments**
+Secrets: `TEAMS_WEBHOOK_URL` (optional). Create GitHub **Environments**
 `dev/qa/uat/prod` and add required reviewers on `uat` and `prod` to gate applies.
 
 ## Deploy an environment
 
 Via CI (recommended): **Actions → deploy → Run workflow → choose env**. The run
 plans, waits for approval, applies, runs Ansible over SSM, smoke-tests `/health`,
-and notifies Slack.
+and notifies Teams.
 
 Locally:
 

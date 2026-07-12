@@ -15,7 +15,7 @@ are enforced, and the deliberate exceptions surfaced by `checkov`.
 | **Secrets** | DB credentials are generated and stored in Secrets Manager (KMS-encrypted); never committed. Instances read them via a least-privilege IAM policy. |
 | **Identity** | EC2 instance role is scoped to SSM + CloudWatch + the specific secret/KMS ARNs. CI authenticates to AWS via GitHub OIDC — no long-lived keys. |
 | **Host** | Ansible `security` role: SSH hardening, password login disabled, fail2ban, firewalld, sysctl hardening, unattended security updates. |
-| **Observability** | CloudWatch alarms → SNS (Slack), dashboards, flow logs, ALB access logs, RDS log exports, Performance Insights. |
+| **Observability** | CloudWatch alarms → SNS (Teams), dashboards, flow logs, ALB access logs, RDS log exports, Performance Insights. |
 
 ## CI/CD guardrails
 

@@ -14,7 +14,7 @@ manual approval gates.
 
 ```
 GitHub ─► GitHub Actions ─► [ fmt · validate · tflint · checkov · plan ·
-                              approval · apply · ansible · smoke · slack ] ─► AWS
+                              approval · apply · ansible · smoke · teams ] ─► AWS
 
 VPC (3 AZ)
 ├── Public Subnets        → ALB (ACM/TLS, access logs)  +  NAT Gateways
@@ -88,14 +88,14 @@ make check                                    # fmt · validate · tflint · sca
 ```
 
 In CI, use **Actions → deploy** (plan → approval → apply → Ansible → smoke →
-Slack). Setup details: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+Teams). Setup details: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 ## Pipeline
 
 ```
 Pull Request ─► terraform fmt ─► validate ─► tflint ─► checkov ─► ansible-lint
                                                                       │  (plan comment on PR)
-main / dispatch ─► plan ─► manual approval ─► apply ─► Ansible ─► smoke test ─► notify Slack
+main / dispatch ─► plan ─► manual approval ─► apply ─► Ansible ─► smoke test ─► notify Teams
 ```
 
 Authentication to AWS uses **GitHub OIDC** — there are no long-lived cloud

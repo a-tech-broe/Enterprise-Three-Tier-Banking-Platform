@@ -44,7 +44,7 @@ output "kms_key_arn" {
 }
 
 output "sns_alarm_topic_arn" {
-  description = "SNS topic ARN for alarms/Slack notifications."
+  description = "SNS topic ARN for alarms/Teams notifications."
   value       = module.cloudwatch.sns_topic_arn
 }
 

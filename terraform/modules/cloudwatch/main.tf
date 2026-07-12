@@ -1,7 +1,7 @@
 ###############################################################################
 # Observability: SNS alarm topic, key CloudWatch alarms, an application log
 # group, and a summary dashboard. Alarms feed the SNS topic that also backs the
-# README's "Notify Slack" step (subscribe a chatbot/Lambda to this topic).
+# README's "Notify Teams" step (subscribe a chatbot/Lambda to this topic).
 ###############################################################################
 
 resource "aws_sns_topic" "alarms" {

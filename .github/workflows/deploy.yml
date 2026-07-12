@@ -1,7 +1,7 @@
 name: deploy
 
 # End-to-end delivery for one environment:
-#   plan -> manual approval (GitHub Environment) -> apply -> Ansible -> smoke -> Slack
+#   plan -> manual approval (GitHub Environment) -> apply -> Ansible -> smoke -> Teams
 on:
   workflow_dispatch:
     inputs:
@@ -182,21 +182,50 @@ jobs:
           exit 1
 
   # ---------------------------------------------------------------------------
-  # 5) Notify Slack (success or failure).
+  # 5) Notify Microsoft Teams (success or failure).
   # ---------------------------------------------------------------------------
   notify:
-    name: notify-slack
+    name: notify-teams
     needs: [plan, apply, configure, smoke-test]
     runs-on: ubuntu-latest
-    if: always() && vars.SLACK_WEBHOOK_CONFIGURED == 'true'
+    if: always() && vars.TEAMS_WEBHOOK_CONFIGURED == 'true'
     steps:
-      - name: Post result to Slack
+      - name: Post result to Microsoft Teams
         env:
-          WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          WEBHOOK: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          TARGET: ${{ needs.plan.outputs.target }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          APPLY_RESULT: ${{ needs.apply.result }}
+          SMOKE_RESULT: ${{ needs.smoke-test.result }}
         run: |
-          status="${{ (needs.smoke-test.result == 'success' && needs.apply.result == 'success') && ':white_check_mark: succeeded' || ':x: failed' }}"
-          payload=$(printf '{"text":"*Banking Platform deploy* to `%s` %s (run <%s|#%s>)"}' \
-            "${{ needs.plan.outputs.target }}" "$status" \
-            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            "${{ github.run_number }}")
-          curl -s -X POST -H 'Content-type: application/json' --data "$payload" "$WEBHOOK"
+          if [ "$SMOKE_RESULT" = "success" ] && [ "$APPLY_RESULT" = "success" ]; then
+            status="✅ succeeded"; color="Good"
+          else
+            status="❌ failed"; color="Attention"
+          fi
+          # Adaptive Card wrapped for a Teams "Workflows" (Power Automate) webhook.
+          jq -n \
+            --arg text "Banking Platform deploy to **$TARGET** $status" \
+            --arg run "Run #$RUN_NUMBER" \
+            --arg url "$RUN_URL" \
+            --arg color "$color" \
+            '{
+              type: "message",
+              attachments: [{
+                contentType: "application/vnd.microsoft.card.adaptive",
+                content: {
+                  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                  type: "AdaptiveCard",
+                  version: "1.4",
+                  body: [
+                    { type: "TextBlock", size: "Medium", weight: "Bolder", color: $color, wrap: true, text: $text },
+                    { type: "TextBlock", isSubtle: true, wrap: true, text: $run }
+                  ],
+                  actions: [
+                    { type: "Action.OpenUrl", title: "View workflow run", url: $url }
+                  ]
+                }
+              }]
+            }' > teams-payload.json
+          curl -s -H "Content-Type: application/json" -d @teams-payload.json "$WEBHOOK"

@@ -1,5 +1,5 @@
 output "sns_topic_arn" {
-  description = "ARN of the SNS alarm topic (subscribe Slack/chatbot here)."
+  description = "ARN of the SNS alarm topic (subscribe Teams/chatbot here)."
   value       = aws_sns_topic.alarms.arn
 }
 
