@@ -1,0 +1,18 @@
+---
+# Dynamic inventory: discovers running app instances tagged for the qa environment.
+plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1
+filters:
+  tag:Environment: qa
+  tag:Role: app
+  instance-state-name: running
+keyed_groups:
+  - key: tags.Environment
+    prefix: env
+  - key: tags.Role
+    prefix: role
+hostnames:
+  - instance-id
+compose:
+  ansible_host: instance_id

@@ -1,0 +1,9 @@
+---
+env_name: uat
+
+# Connect through SSM Session Manager (requires the community.aws SSM plugin and
+# the AWS CLI Session Manager plugin on the controller). No SSH keys or bastion.
+ansible_connection: community.aws.aws_ssm
+ansible_aws_ssm_region: us-east-1
+ansible_aws_ssm_bucket_name: banking-platform-uat-ansible-ssm
+ansible_python_interpreter: /usr/bin/python3

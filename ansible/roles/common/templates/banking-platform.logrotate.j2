@@ -1,0 +1,11 @@
+/var/log/banking-platform/*.log {
+    daily
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    dateext
+    su {{ common_app_user }} {{ common_app_group }}
+}

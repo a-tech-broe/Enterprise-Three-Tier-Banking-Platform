@@ -1,0 +1,6 @@
+# Require platform-engineering review on all infrastructure changes.
+*                       @platform-engineering
+
+/terraform/environments/prod/   @platform-engineering @security-team
+/terraform/bootstrap/           @platform-engineering @security-team
+/.github/workflows/             @platform-engineering

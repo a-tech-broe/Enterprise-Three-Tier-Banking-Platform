@@ -1,0 +1,108 @@
+name: validate
+
+# Static quality gate: runs on every PR and push. No AWS credentials required.
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - "ansible/**"
+      - ".github/workflows/**"
+  push:
+    branches: [main, dev]
+    paths:
+      - "terraform/**"
+      - "ansible/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.9.8"
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  terraform-fmt:
+    name: terraform fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Check formatting
+        run: terraform fmt -check -recursive -diff terraform/
+
+  terraform-validate:
+    name: terraform validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - terraform/environments/dev
+          - terraform/environments/qa
+          - terraform/environments/uat
+          - terraform/environments/prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Init (no backend)
+        run: terraform -chdir=${{ matrix.dir }} init -backend=false -input=false
+      - name: Validate
+        run: terraform -chdir=${{ matrix.dir }} validate
+
+  tflint:
+    name: tflint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+      - name: Init tflint
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run tflint
+        run: tflint --recursive --config="$(pwd)/.tflint.hcl"
+
+  checkov:
+    name: checkov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform/
+          config_file: .checkov.yml
+          quiet: true
+          soft_fail: false
+          output_format: cli
+
+  ansible-lint:
+    name: ansible-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ansible-lint
+        run: pip install "ansible-lint>=24.0" "ansible-core>=2.16"
+      - name: Install collection dependencies
+        working-directory: ansible
+        # Required so ansible-lint can resolve modules like ansible.posix.firewalld
+        # and community.general.* during its syntax-check pass.
+        run: ansible-galaxy collection install -r requirements.yml
+      - name: Lint playbooks and roles
+        working-directory: ansible
+        run: ansible-lint site.yml roles/

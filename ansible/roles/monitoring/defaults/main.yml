@@ -1,0 +1,6 @@
+---
+monitoring_node_exporter_version: "1.8.2"
+monitoring_node_exporter_port: 9100
+monitoring_cloudwatch_namespace: "BankingPlatform"
+monitoring_app_log_file: "/var/log/banking-platform/app.log"
+monitoring_cloudwatch_log_group: "/banking-platform/{{ env_name | default('dev') }}/app"

@@ -1,0 +1,19 @@
+---
+- name: Install Java runtime
+  ansible.builtin.package:
+    name: "{{ java_package }}"
+    state: present
+
+- name: Locate the Java installation
+  ansible.builtin.command: readlink -f /usr/bin/java
+  register: java_real_path
+  changed_when: false
+
+- name: Export JAVA_HOME for all users
+  ansible.builtin.copy:
+    dest: /etc/profile.d/java.sh
+    mode: "0644"
+    content: |
+      export JAVA_HOME="{{ java_real_path.stdout | dirname | dirname }}"
+      export PATH="$JAVA_HOME/bin:$PATH"
+  when: java_set_default | bool

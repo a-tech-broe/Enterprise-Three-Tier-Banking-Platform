@@ -1,0 +1,68 @@
+---
+- name: Set the system timezone
+  community.general.timezone:
+    name: "{{ common_timezone }}"
+
+- name: Ensure chrony (time sync) is installed and running
+  ansible.builtin.service:
+    name: chronyd
+    state: started
+    enabled: true
+
+- name: Install baseline packages
+  ansible.builtin.package:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Apply available security updates
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    security: true
+    update_only: true
+  when: common_enable_security_updates | bool
+  register: common_security_updates
+  retries: 3
+  delay: 10
+  until: common_security_updates is succeeded
+
+- name: Create application group
+  ansible.builtin.group:
+    name: "{{ common_app_group }}"
+    state: present
+
+- name: Create application service account (no login shell)
+  ansible.builtin.user:
+    name: "{{ common_app_user }}"
+    group: "{{ common_app_group }}"
+    shell: /sbin/nologin
+    system: true
+    create_home: false
+    state: present
+
+- name: Create application directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ common_app_user }}"
+    group: "{{ common_app_group }}"
+    mode: "0750"
+  loop: "{{ common_app_dirs }}"
+
+- name: Configure log rotation for the application
+  ansible.builtin.template:
+    src: banking-platform.logrotate.j2
+    dest: /etc/logrotate.d/banking-platform
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Set a descriptive message of the day
+  ansible.builtin.copy:
+    dest: /etc/motd
+    mode: "0644"
+    content: |
+      ============================================================
+       Banking Platform :: {{ env_name | default('unknown') }} :: managed by Ansible
+       Unauthorized access is prohibited and monitored.
+      ============================================================

@@ -1,0 +1,85 @@
+name: destroy
+
+# Guarded teardown. Requires typing the environment name to confirm, and is
+# gated by the GitHub Environment's required reviewers. Prod destroys should
+# additionally be protected by a branch/environment protection rule.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to DESTROY
+        type: choice
+        options: [dev, qa, uat, prod]
+        default: dev
+      confirm:
+        description: Type the environment name exactly to confirm
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TF_VERSION: "1.9.8"
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+concurrency:
+  group: destroy-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: confirm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required repository configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}
+        run: |
+          missing=()
+          [ -z "$AWS_ROLE_ARN" ]    && missing+=("AWS_ROLE_ARN")
+          [ -z "$TF_STATE_BUCKET" ] && missing+=("TF_STATE_BUCKET")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing repository variable(s): ${missing[*]}. See docs/RUNBOOK.md."
+            exit 1
+          fi
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "${{ github.event.inputs.environment }}" ]; then
+            echo "Confirmation '${{ github.event.inputs.confirm }}' does not match environment '${{ github.event.inputs.environment }}'."
+            exit 1
+          fi
+      - name: Block prod destroys without explicit override
+        if: github.event.inputs.environment == 'prod'
+        run: |
+          echo "::warning::Destroying PROD. This proceeds only after environment approval."
+
+  destroy:
+    name: destroy
+    needs: guard
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}   # <-- approval gate
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-destroy
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Init
+        working-directory: terraform/environments/${{ github.event.inputs.environment }}
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || secrets.TF_LOCK_TABLE }}" \
+            -backend-config="region=${{ env.AWS_REGION }}"
+      - name: Destroy
+        working-directory: terraform/environments/${{ github.event.inputs.environment }}
+        run: terraform destroy -input=false -auto-approve

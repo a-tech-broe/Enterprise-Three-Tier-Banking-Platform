@@ -1,0 +1,16 @@
+# Managed by Ansible - banking-platform security role
+PermitRootLogin {{ security_ssh_permit_root_login }}
+PasswordAuthentication {{ security_ssh_password_authentication }}
+ChallengeResponseAuthentication no
+KbdInteractiveAuthentication no
+X11Forwarding {{ security_ssh_x11_forwarding }}
+MaxAuthTries {{ security_ssh_max_auth_tries }}
+ClientAliveInterval {{ security_ssh_client_alive_interval }}
+ClientAliveCountMax {{ security_ssh_client_alive_count_max }}
+Protocol 2
+PermitEmptyPasswords no
+IgnoreRhosts yes
+HostbasedAuthentication no
+AllowAgentForwarding no
+AllowTcpForwarding no
+LoginGraceTime 30

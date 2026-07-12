@@ -1,0 +1,47 @@
+---
+###############################################################################
+# Master playbook - configures every app-tier EC2 instance after Terraform.
+#
+# Run:  ansible-playbook -i inventories/<env>/aws_ec2.yml site.yml
+# Connection is via AWS SSM Session Manager (see group_vars/all.yml), so no
+# inbound SSH or bastion is required.
+###############################################################################
+
+- name: Configure banking-platform application servers
+  hosts: all
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Wait for the instance to finish booting
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Record the configuration run start time
+      ansible.builtin.command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+      register: run_started
+      changed_when: false
+
+  roles:
+    - role: common
+      tags: [common]
+    - role: security
+      tags: [security]
+    - role: java
+      tags: [java]
+    - role: docker
+      tags: [docker]
+    - role: monitoring
+      tags: [monitoring]
+    - role: nginx
+      tags: [nginx]
+
+  post_tasks:
+    - name: Write deployment marker
+      ansible.builtin.copy:
+        dest: /etc/banking-platform/configured
+        mode: "0644"
+        content: |
+          environment={{ env_name | default('unknown') }}
+          configured_at={{ run_started.stdout }}
+          managed_by=ansible

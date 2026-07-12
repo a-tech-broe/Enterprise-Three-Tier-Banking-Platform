@@ -1,0 +1,27 @@
+---
+common_timezone: "UTC"
+common_hostname_prefix: "bank-app"
+
+# Baseline packages installed on every host.
+common_packages:
+  - vim
+  - git
+  - curl
+  - wget
+  - unzip
+  - jq
+  - htop
+  - chrony
+  - python3
+  - python3-pip
+  - logrotate
+
+# Application service account (non-login) that owns app files and processes.
+common_app_user: "appuser"
+common_app_group: "appuser"
+common_app_dirs:
+  - /opt/banking-platform
+  - /var/log/banking-platform
+  - /etc/banking-platform
+
+common_enable_security_updates: true

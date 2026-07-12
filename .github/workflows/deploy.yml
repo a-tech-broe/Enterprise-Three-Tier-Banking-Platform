@@ -1,0 +1,233 @@
+name: deploy
+
+# End-to-end delivery for one environment:
+#   plan -> manual approval (GitHub Environment) -> apply -> Ansible -> smoke -> Teams
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [dev, qa, uat, prod]
+        default: dev
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - "ansible/**"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TF_VERSION: "1.9.8"
+  # Region defaults to us-east-1 (all environments target it); override by
+  # setting an AWS_REGION repository variable.
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  # Pushes to main auto-target dev; higher envs are promoted via workflow_dispatch.
+  TARGET_ENV: ${{ github.event.inputs.environment || 'dev' }}
+
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) Plan (unapproved) — surfaces the diff before the approval gate.
+  # ---------------------------------------------------------------------------
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.set.outputs.target }}
+    steps:
+      - id: set
+        run: echo "target=${TARGET_ENV}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+      - name: Preflight - verify required repository configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}
+        run: |
+          missing=()
+          [ -z "$AWS_ROLE_ARN" ]    && missing+=("AWS_ROLE_ARN")
+          [ -z "$TF_STATE_BUCKET" ] && missing+=("TF_STATE_BUCKET")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing repository variable(s): ${missing[*]}. See docs/RUNBOOK.md."
+            exit 1
+          fi
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-deploy-plan
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Init & plan
+        working-directory: terraform/environments/${{ env.TARGET_ENV }}
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || secrets.TF_LOCK_TABLE }}" \
+            -backend-config="region=${{ env.AWS_REGION }}"
+          terraform plan -input=false -out=tfplan.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deploy-plan-${{ env.TARGET_ENV }}
+          path: terraform/environments/${{ env.TARGET_ENV }}/tfplan.bin
+          retention-days: 5
+
+  # ---------------------------------------------------------------------------
+  # 2) Apply — gated by the GitHub Environment's required reviewers.
+  # ---------------------------------------------------------------------------
+  apply:
+    name: apply
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: ${{ needs.plan.outputs.target }}   # <-- manual approval happens here
+    outputs:
+      asg_name: ${{ steps.outputs.outputs.asg_name }}
+      app_url: ${{ steps.outputs.outputs.app_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-deploy-apply
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: deploy-plan-${{ needs.plan.outputs.target }}
+          path: terraform/environments/${{ needs.plan.outputs.target }}
+      - name: Init & apply saved plan
+        working-directory: terraform/environments/${{ needs.plan.outputs.target }}
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || secrets.TF_LOCK_TABLE }}" \
+            -backend-config="region=${{ env.AWS_REGION }}"
+          terraform apply -input=false -auto-approve tfplan.bin
+      - name: Export outputs
+        id: outputs
+        working-directory: terraform/environments/${{ needs.plan.outputs.target }}
+        run: |
+          echo "asg_name=$(terraform output -raw asg_name)" >> "$GITHUB_OUTPUT"
+          echo "app_url=$(terraform output -raw app_url)" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # 3) Configure instances with Ansible over SSM.
+  # ---------------------------------------------------------------------------
+  configure:
+    name: ansible
+    needs: [plan, apply]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-deploy-ansible
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Ansible & session-manager-plugin
+        run: |
+          pip install "ansible-core>=2.16" boto3 botocore
+          ansible-galaxy collection install -r ansible/requirements.yml
+          curl -s "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o smp.deb
+          sudo dpkg -i smp.deb
+      - name: Wait for instances to register in the ASG
+        run: |
+          for i in $(seq 1 30); do
+            count=$(aws autoscaling describe-auto-scaling-groups \
+              --auto-scaling-group-names "${{ needs.apply.outputs.asg_name }}" \
+              --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`] | length(@)' --output text)
+            echo "In-service instances: $count"
+            [ "$count" -ge 1 ] && break
+            sleep 20
+          done
+      - name: Run Ansible
+        working-directory: ansible
+        run: |
+          ansible-playbook -i inventories/${{ needs.plan.outputs.target }}/aws_ec2.yml site.yml
+
+  # ---------------------------------------------------------------------------
+  # 4) Smoke test the public endpoint.
+  # ---------------------------------------------------------------------------
+  smoke-test:
+    name: smoke-test
+    needs: [apply, configure]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe health endpoint
+        run: |
+          url="${{ needs.apply.outputs.app_url }}/health"
+          echo "Probing $url"
+          for i in $(seq 1 20); do
+            code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$url" || echo 000)
+            echo "attempt $i -> HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 15
+          done
+          echo "Smoke test failed: health endpoint never returned 200"
+          exit 1
+
+  # ---------------------------------------------------------------------------
+  # 5) Notify Microsoft Teams (success or failure).
+  # ---------------------------------------------------------------------------
+  notify:
+    name: notify-teams
+    needs: [plan, apply, configure, smoke-test]
+    runs-on: ubuntu-latest
+    if: always() && vars.TEAMS_WEBHOOK_CONFIGURED == 'true'
+    steps:
+      - name: Post result to Microsoft Teams
+        env:
+          WEBHOOK: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          TARGET: ${{ needs.plan.outputs.target }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          APPLY_RESULT: ${{ needs.apply.result }}
+          SMOKE_RESULT: ${{ needs.smoke-test.result }}
+        run: |
+          if [ "$SMOKE_RESULT" = "success" ] && [ "$APPLY_RESULT" = "success" ]; then
+            status="✅ succeeded"; color="Good"
+          else
+            status="❌ failed"; color="Attention"
+          fi
+          # Adaptive Card wrapped for a Teams "Workflows" (Power Automate) webhook.
+          jq -n \
+            --arg text "Banking Platform deploy to **$TARGET** $status" \
+            --arg run "Run #$RUN_NUMBER" \
+            --arg url "$RUN_URL" \
+            --arg color "$color" \
+            '{
+              type: "message",
+              attachments: [{
+                contentType: "application/vnd.microsoft.card.adaptive",
+                content: {
+                  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                  type: "AdaptiveCard",
+                  version: "1.4",
+                  body: [
+                    { type: "TextBlock", size: "Medium", weight: "Bolder", color: $color, wrap: true, text: $text },
+                    { type: "TextBlock", isSubtle: true, wrap: true, text: $run }
+                  ],
+                  actions: [
+                    { type: "Action.OpenUrl", title: "View workflow run", url: $url }
+                  ]
+                }
+              }]
+            }' > teams-payload.json
+          curl -s -H "Content-Type: application/json" -d @teams-payload.json "$WEBHOOK"

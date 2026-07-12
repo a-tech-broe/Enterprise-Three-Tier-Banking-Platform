@@ -1,0 +1,37 @@
+---
+- name: Install Docker engine (Amazon Linux 2023 package)
+  ansible.builtin.package:
+    name: docker
+    state: present
+
+- name: Ensure /etc/docker exists
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    mode: "0755"
+
+- name: Configure the Docker daemon
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+    content: "{{ docker_daemon_options | to_nice_json }}"
+  notify: Restart docker
+
+- name: Enable and start Docker
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Add application users to the docker group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker_users }}"
+
+- name: Install the Docker Compose plugin
+  ansible.builtin.package:
+    name: docker-compose-plugin
+    state: present
+  failed_when: false

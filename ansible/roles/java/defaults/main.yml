@@ -1,0 +1,3 @@
+---
+java_package: "java-17-amazon-corretto-headless"
+java_set_default: true
