@@ -22,6 +22,9 @@ permissions:
 
 env:
   TF_VERSION: "1.9.8"
+  # Region defaults to us-east-1 (all environments target it); override by
+  # setting an AWS_REGION repository variable.
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
   # Pushes to main auto-target dev; higher envs are promoted via workflow_dispatch.
   TARGET_ENV: ${{ github.event.inputs.environment || 'dev' }}
 
@@ -42,11 +45,23 @@ jobs:
       - id: set
         run: echo "target=${TARGET_ENV}" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
+      - name: Preflight - verify required repository configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          missing=()
+          [ -z "$AWS_ROLE_ARN" ]    && missing+=("AWS_ROLE_ARN")
+          [ -z "$TF_STATE_BUCKET" ] && missing+=("TF_STATE_BUCKET")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing repository variable(s): ${missing[*]}. See docs/RUNBOOK.md."
+            exit 1
+          fi
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
           role-session-name: gha-deploy-plan
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -57,7 +72,7 @@ jobs:
           terraform init -input=false \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
             -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
-            -backend-config="region=${{ vars.AWS_REGION }}"
+            -backend-config="region=${{ env.AWS_REGION }}"
           terraform plan -input=false -out=tfplan.bin
       - uses: actions/upload-artifact@v4
         with:
@@ -82,7 +97,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
           role-session-name: gha-deploy-apply
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -97,7 +112,7 @@ jobs:
           terraform init -input=false \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
             -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
-            -backend-config="region=${{ vars.AWS_REGION }}"
+            -backend-config="region=${{ env.AWS_REGION }}"
           terraform apply -input=false -auto-approve tfplan.bin
       - name: Export outputs
         id: outputs
@@ -119,7 +134,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
           role-session-name: gha-deploy-ansible
       - uses: actions/setup-python@v5
         with:
