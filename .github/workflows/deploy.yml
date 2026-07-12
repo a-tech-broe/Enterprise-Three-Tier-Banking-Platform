@@ -66,6 +66,7 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
       - name: Init & plan
         working-directory: terraform/environments/${{ env.TARGET_ENV }}
         run: |
@@ -102,6 +103,7 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
       - uses: actions/download-artifact@v4
         with:
           name: deploy-plan-${{ needs.plan.outputs.target }}
