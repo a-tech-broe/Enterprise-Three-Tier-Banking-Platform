@@ -60,7 +60,7 @@ ansible/
   roles/{common,docker,java,nginx,monitoring,security}/
   site.yml  ansible.cfg  requirements.yml
 .github/workflows/
-  validate.yml  plan.yml  deploy.yml  destroy.yml
+  bootstrap.yml  validate.yml  plan.yml  deploy.yml  destroy.yml
 docs/           ARCHITECTURE · RUNBOOK · SECURITY
 scripts/        bootstrap-backend.sh
 .tflint.hcl  .checkov.yml  .pre-commit-config.yaml  Makefile
@@ -87,8 +87,15 @@ make configure ENV=dev
 make check                                    # fmt · validate · tflint · scan · ansible-lint
 ```
 
-In CI, use **Actions → deploy** (plan → approval → apply → Ansible → smoke →
-Teams). Setup details: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+### CI-first (no local tooling)
+
+1. Add repo config (`AWS_ROLE_ARN`, `TF_STATE_BUCKET`, `TF_LOCK_TABLE`, and
+   admin `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`) as Variables or Secrets.
+2. **Actions → bootstrap → Run workflow** — provisions the OIDC provider, role
+   trust policy, and deploy permissions automatically (then delete the admin keys).
+3. **Actions → deploy** — plan → approval → apply → Ansible → smoke → Teams.
+
+Setup details: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 ## Pipeline
 

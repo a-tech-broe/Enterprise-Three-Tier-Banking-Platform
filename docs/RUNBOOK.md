@@ -2,32 +2,42 @@
 
 ## Prerequisites
 
-- Terraform >= 1.5, Ansible >= 2.16, AWS CLI v2 + Session Manager plugin.
-- An AWS account and an IAM role that GitHub Actions can assume via OIDC.
+- An AWS account, an IAM role for CI, and an S3 bucket + DynamoDB table for state.
+- Local tooling (Terraform/Ansible/AWS CLI) is only needed if you run outside CI.
 
-## One-time: create the remote-state backend
+## One-time setup — fully automated, no local CLI
 
-```bash
-cd terraform/bootstrap
-terraform init
-terraform apply -var="state_bucket_name=banking-platform-tfstate-<ACCOUNT_ID>"
-terraform output backend_config_hint     # copy into each env's backend.hcl
-```
+The entire AWS-side wiring (OIDC provider, role trust policy, role permissions,
+and optionally the state backend) is provisioned by the **`bootstrap` workflow**.
+You only set repository config, then click one button.
 
-## One-time: wire GitHub
+**1. Add config** (Settings → Secrets and variables → Actions). Values may live
+in either the **Variables** or **Secrets** tab — the workflows read both:
 
-Create these **repository variables** (Settings → Secrets and variables → Actions):
+| Name | Example | Notes |
+|------|---------|-------|
+| `AWS_ROLE_ARN` | `arn:aws:iam::<acct>:role/github-actions-terraform` | role CI assumes via OIDC |
+| `TF_STATE_BUCKET` | `banking-platform-tfstate-<acct>` | existing state bucket |
+| `TF_LOCK_TABLE` | `banking-platform-tf-locks` | existing lock table (hash key `LockID`) |
+| `AWS_REGION` | `us-east-1` | optional; defaults to `us-east-1` |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | — | **admin** keys, used only by `bootstrap` |
+| `TEAMS_WEBHOOK_CONFIGURED` / `TEAMS_WEBHOOK_URL` | `true` / webhook | optional notifications |
 
-| Variable | Example |
-|----------|---------|
-| `AWS_ROLE_ARN` | `arn:aws:iam::<acct>:role/github-oidc-banking-platform` |
-| `AWS_REGION` | `us-east-1` |
-| `TF_STATE_BUCKET` | `banking-platform-tfstate-<acct>` |
-| `TF_LOCK_TABLE` | `banking-platform-tf-locks` |
-| `TEAMS_WEBHOOK_CONFIGURED` | `true` (optional) |
+**2. Run bootstrap** — **Actions → bootstrap → Run workflow**. Using the admin
+keys, it creates the OIDC provider (if missing), applies the repo-scoped trust
+policy, and attaches the deploy permissions policy to the role. Tick
+`create_backend` if you also want it to create the S3 bucket + DynamoDB table.
 
-Secrets: `TEAMS_WEBHOOK_URL` (optional). Create GitHub **Environments**
-`dev/qa/uat/prod` and add required reviewers on `uat` and `prod` to gate applies.
+**3. Delete the admin keys** — once bootstrap succeeds, remove
+`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`. Everything else runs on
+short-lived OIDC credentials.
+
+**4. Environments** — create GitHub **Environments** `dev/qa/uat/prod` and add
+required reviewers on `uat`/`prod` to gate applies (the only intentional manual
+step: production approval).
+
+> Prefer to do the AWS-side setup from your laptop instead? `scripts/setup-oidc.sh`
+> and `docs/{oidc-trust-policy,iam-deploy-policy}.json` do the same thing manually.
 
 ## Deploy an environment
 

@@ -29,7 +29,7 @@ resource "aws_cloudwatch_log_group" "app" {
 # ASG / compute alarms
 # ---------------------------------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  count               = var.asg_name != "" ? 1 : 0
+  count               = var.enable_asg_alarms ? 1 : 0
   alarm_name          = "${var.name}-asg-high-cpu"
   alarm_description   = "Average ASG CPU utilization above ${var.cpu_alarm_threshold}%"
   namespace           = "AWS/EC2"
@@ -54,7 +54,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
 # ALB alarms
 # ---------------------------------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
-  count               = var.target_group_arn_suffix != "" && var.alb_arn_suffix != "" ? 1 : 0
+  count               = var.enable_alb_alarms ? 1 : 0
   alarm_name          = "${var.name}-alb-unhealthy-hosts"
   alarm_description   = "One or more targets are unhealthy"
   namespace           = "AWS/ApplicationELB"
@@ -77,7 +77,7 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
-  count               = var.alb_arn_suffix != "" ? 1 : 0
+  count               = var.enable_alb_alarms ? 1 : 0
   alarm_name          = "${var.name}-alb-5xx"
   alarm_description   = "Elevated 5XX responses from the load balancer"
   namespace           = "AWS/ApplicationELB"
@@ -101,7 +101,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
 # RDS alarms
 # ---------------------------------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "db_cpu" {
-  count               = var.db_instance_id != "" ? 1 : 0
+  count               = var.enable_db_alarms ? 1 : 0
   alarm_name          = "${var.name}-rds-high-cpu"
   alarm_description   = "RDS CPU utilization above 80%"
   namespace           = "AWS/RDS"
@@ -122,7 +122,7 @@ resource "aws_cloudwatch_metric_alarm" "db_cpu" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "db_free_storage" {
-  count               = var.db_instance_id != "" ? 1 : 0
+  count               = var.enable_db_alarms ? 1 : 0
   alarm_name          = "${var.name}-rds-low-storage"
   alarm_description   = "RDS free storage below threshold"
   namespace           = "AWS/RDS"

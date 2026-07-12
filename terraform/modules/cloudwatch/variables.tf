@@ -38,6 +38,27 @@ variable "db_instance_id" {
   default     = ""
 }
 
+# Alarm toggles. These are gated on *static* booleans (known at plan time) rather
+# than on computed ARNs/IDs, because count/for_each cannot depend on values that
+# are unknown until apply (e.g. a not-yet-created ASG name or RDS id).
+variable "enable_asg_alarms" {
+  description = "Create ASG/compute alarms."
+  type        = bool
+  default     = true
+}
+
+variable "enable_alb_alarms" {
+  description = "Create ALB alarms (unhealthy hosts, 5XX)."
+  type        = bool
+  default     = true
+}
+
+variable "enable_db_alarms" {
+  description = "Create RDS alarms (CPU, free storage)."
+  type        = bool
+  default     = true
+}
+
 variable "app_log_group_name" {
   description = "Name of the application log group to create."
   type        = string

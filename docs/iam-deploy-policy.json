@@ -14,7 +14,7 @@
       "Sid": "TerraformStateLock",
       "Effect": "Allow",
       "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:DescribeTable"],
-      "Resource": "arn:aws:dynamodb:*:694992586025:table/<LOCK_TABLE>"
+      "Resource": "arn:aws:dynamodb:*:<ACCOUNT_ID>:table/<LOCK_TABLE>"
     },
     {
       "Sid": "CoreInfraServices",
