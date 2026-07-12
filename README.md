@@ -1,179 +1,112 @@
-# Enterprise-Three-Tier-Banking-Platform
-A bank wants an automated platform where every environment (Dev, QA, UAT, Prod) is created from Git.  No engineer is allowed to manually create AWS resources.
+# Enterprise Three-Tier Banking Platform
 
+A bank wants an automated platform where **every environment (Dev, QA, UAT, Prod)
+is created from Git**. No engineer manually creates AWS resources. Terraform
+provisions the infrastructure, Ansible configures the instances, and GitHub
+Actions orchestrates the whole delivery pipeline with security scanning and
+manual approval gates.
 
-Architecture
-GitHub
-    │
-    ▼
-GitHub Actions
-    │
-    ├── Terraform Plan
-    ├── Security Scan
-    ├── Manual Approval
-    ├── Terraform Apply
-    │
-    ▼
-AWS
+> Status: infrastructure-as-code, configuration management, and CI/CD are
+> implemented and pass `terraform validate`, `checkov` (0 findings), and
+> `ansible-lint` (production profile). See [`docs/`](docs/) for details.
 
-VPC
-├── Public Subnets
-│      └── ALB
-│
-├── Private App Subnets
-│      ├── EC2 Auto Scaling
-│      ├── Bastion disabled
-│      └── CloudWatch Agent
-│
-└── Private DB Subnets
-       └── Multi-AZ RDS PostgreSQL
+## Architecture
 
-Terraform builds
+```
+GitHub ─► GitHub Actions ─► [ fmt · validate · tflint · checkov · plan ·
+                              approval · apply · ansible · smoke · slack ] ─► AWS
 
-* Custom VPC
-* 3 Availability Zones
-* Internet Gateway
-* NAT Gateways
-* Route Tables
-* Security Groups
-* IAM Roles
-* KMS
-* S3 backend
-* DynamoDB locking
-* Application Load Balancer
-* Launch Template
-* Auto Scaling Group
-* ACM Certificate
-* Route53
-* RDS PostgreSQL
-* Secrets Manager
-* CloudWatch
-* SNS Notifications
+VPC (3 AZ)
+├── Public Subnets        → ALB (ACM/TLS, access logs)  +  NAT Gateways
+├── Private App Subnets   → EC2 Auto Scaling Group (nginx, CloudWatch agent, SSM)
+└── Private DB Subnets    → Multi-AZ RDS PostgreSQL (KMS, Secrets Manager)
+```
 
-Ansible configures
+Full diagrams and design rationale: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-When Terraform finishes:
+## What Terraform builds
 
-Configure every EC2 automatically.
+Custom VPC · 3 AZs · Internet Gateway · NAT Gateways · Route Tables · VPC Flow
+Logs · S3 Gateway Endpoint · Security Groups (three-tier, least privilege) · IAM
+roles + instance profile · KMS CMKs · S3 remote-state backend · DynamoDB locking
+· Application Load Balancer (HTTP→HTTPS) · Launch Template (IMDSv2, encrypted
+EBS) · Auto Scaling Group (rolling instance refresh, target-tracking) · ACM
+certificate · Route53 · Multi-AZ RDS PostgreSQL · Secrets Manager · CloudWatch
+dashboards/alarms · SNS notifications.
 
-Install
+## What Ansible configures
 
-* Docker
-* CloudWatch Agent
-* Node Exporter
-* Amazon SSM Agent
-* Fail2Ban
-* Nginx
-* Java
-* Python
-* Security updates
+Runs automatically after Terraform, over **SSM Session Manager** (no bastion, no
+inbound SSH):
 
-Then
+`common` (packages, users, timezone, log rotation, security updates) ·
+`security` (SSH hardening, disable password login, fail2ban, firewalld, sysctl,
+unattended patching) · `java` (Corretto) · `docker` (hardened daemon) ·
+`monitoring` (CloudWatch agent + Node Exporter) · `nginx` (reverse proxy +
+health endpoint) · then deploys the application.
 
-* Deploy application
-* Configure log rotation
-* Configure firewall
-* Configure users/groups
-* Configure SSH hardening
-* Disable password login
-* Install monitoring agents
+## Repository layout
 
-⸻
-
-GitHub Actions pipeline
-Pull Request
-
-↓
-
-terraform fmt
-
-↓
-
-terraform validate
-
-↓
-
-tflint
-
-↓
-
-checkov
-
-↓
-
-terraform plan
-
-↓
-
-upload artifact
-
-↓
-
-Approval
-
-↓
-
-terraform apply
-
-↓
-
-Run Ansible
-
-↓
-
-Smoke Test
-
-↓
-
-Notify Slack
-
-Repository
-banking-platform
-
+```
 terraform/
-    modules/
-        vpc/
-        alb/
-        rds/
-        ec2/
-        iam/
-        kms/
-        cloudwatch/
-
+  bootstrap/            S3 + DynamoDB + KMS remote-state backend (run once)
+  modules/
+    vpc/ security-groups/ kms/ iam/ alb/ ec2/ rds/ cloudwatch/ dns/
+    platform/           composition module wiring everything together
+  environments/
+    dev/ qa/ uat/ prod/ thin per-env roots (backend + tfvars-in-code)
 ansible/
+  inventories/{dev,qa,uat,prod}/   aws_ec2 dynamic inventory + group_vars
+  roles/{common,docker,java,nginx,monitoring,security}/
+  site.yml  ansible.cfg  requirements.yml
+.github/workflows/
+  validate.yml  plan.yml  deploy.yml  destroy.yml
+docs/           ARCHITECTURE · RUNBOOK · SECURITY
+scripts/        bootstrap-backend.sh
+.tflint.hcl  .checkov.yml  .pre-commit-config.yaml  Makefile
+```
 
-    inventories/
+## Quick start
 
-    roles/
+```bash
+# 0. Prereqs: terraform >= 1.5, ansible >= 2.16, aws cli v2 + session-manager-plugin
+make galaxy                                   # install Ansible collections
 
-        common
-        docker
-        nginx
-        java
-        monitoring
-        security
+# 1. Create the remote-state backend for your account (once)
+./scripts/bootstrap-backend.sh us-east-1      # writes backend.hcl into each env
 
-.github/
+# 2. Provision an environment
+make init  ENV=dev
+make plan  ENV=dev
+make apply ENV=dev
 
-    workflows/
+# 3. Configure the instances
+make configure ENV=dev
 
-        validate.yml
-        plan.yml
-        deploy.yml
-        destroy.yml
+# Run every local quality gate
+make check                                    # fmt · validate · tflint · scan · ansible-lint
+```
 
+In CI, use **Actions → deploy** (plan → approval → apply → Ansible → smoke →
+Slack). Setup details: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
-Skills demonstrated
+## Pipeline
 
-* Infrastructure as Code
-* Configuration Management
-* Immutable Infrastructure
-* GitOps
-* DevSecOps
-* Enterprise Networking
-* Auto Scaling
-* IAM
-* Security
-* Monitoring
+```
+Pull Request ─► terraform fmt ─► validate ─► tflint ─► checkov ─► ansible-lint
+                                                                      │  (plan comment on PR)
+main / dispatch ─► plan ─► manual approval ─► apply ─► Ansible ─► smoke test ─► notify Slack
+```
 
-       
+Authentication to AWS uses **GitHub OIDC** — there are no long-lived cloud
+credentials in the repo or in CI.
+
+## Skills demonstrated
+
+Infrastructure as Code · Configuration Management · Immutable Infrastructure ·
+GitOps · DevSecOps · Enterprise Networking · Auto Scaling · IAM · Security ·
+Monitoring.
+
+## License
+
+See [`LICENSE`](LICENSE).

@@ -1,0 +1,65 @@
+---
+# --- CloudWatch Agent ------------------------------------------------------
+- name: Install the CloudWatch agent
+  ansible.builtin.package:
+    name: amazon-cloudwatch-agent
+    state: present
+
+- name: Deploy the CloudWatch agent configuration
+  ansible.builtin.template:
+    src: cloudwatch-agent.json.j2
+    dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart cloudwatch agent
+
+- name: Enable and start the CloudWatch agent
+  ansible.builtin.service:
+    name: amazon-cloudwatch-agent
+    state: started
+    enabled: true
+
+# --- Node Exporter ---------------------------------------------------------
+- name: Create the node_exporter system user
+  ansible.builtin.user:
+    name: node_exporter
+    shell: /sbin/nologin
+    system: true
+    create_home: false
+
+- name: Download and install node_exporter
+  vars:
+    ne_base: "https://github.com/prometheus/node_exporter/releases/download"
+    ne_ver: "{{ monitoring_node_exporter_version }}"
+  ansible.builtin.unarchive:
+    src: "{{ ne_base }}/v{{ ne_ver }}/node_exporter-{{ ne_ver }}.linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: true
+    creates: "/tmp/node_exporter-{{ ne_ver }}.linux-amd64"
+
+- name: Place the node_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/node_exporter-{{ monitoring_node_exporter_version }}.linux-amd64/node_exporter"
+    dest: /usr/local/bin/node_exporter
+    remote_src: true
+    owner: node_exporter
+    group: node_exporter
+    mode: "0755"
+  notify: Restart node_exporter
+
+- name: Install the node_exporter systemd unit
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart node_exporter
+
+- name: Enable and start node_exporter
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: started
+    enabled: true
+    daemon_reload: true

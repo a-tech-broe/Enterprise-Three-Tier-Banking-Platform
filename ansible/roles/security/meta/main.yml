@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: security
+  author: platform-engineering
+  description: Host hardening for the banking platform.
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Amazon
+      versions:
+        - "2023"
+  galaxy_tags:
+    - banking
+    - platform
+dependencies: []

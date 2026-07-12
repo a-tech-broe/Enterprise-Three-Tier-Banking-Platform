@@ -1,0 +1,10 @@
+# Managed by Ansible - banking-platform security role
+[DEFAULT]
+bantime  = {{ security_fail2ban_bantime }}
+findtime = {{ security_fail2ban_findtime }}
+maxretry = {{ security_fail2ban_maxretry }}
+backend  = systemd
+
+[sshd]
+enabled = true
+port    = ssh

@@ -1,0 +1,6 @@
+# Copy to backend.hcl and fill from the bootstrap module outputs, then run:
+#   terraform init -backend-config=backend.hcl
+bucket         = "banking-platform-tfstate-<ACCOUNT_ID>"
+dynamodb_table = "banking-platform-tf-locks"
+region         = "us-east-1"
+kms_key_id     = "arn:aws:kms:us-east-1:<ACCOUNT_ID>:key/<KEY_ID>"

@@ -1,6 +1,19 @@
 # Local .terraform directories
 .terraform/
 
+# Real backend config (contains account-specific bucket/KMS ARNs). Commit only
+# the *.example templates.
+backend.hcl
+terraform/environments/*/backend.hcl
+
+# Saved plan binaries and rendered plan output produced by CI.
+tfplan.bin
+plan.txt
+
+# Ansible fact cache / retry
+ansible/*.retry
+.ansible/
+
 # .tfstate files
 *.tfstate
 *.tfstate.*

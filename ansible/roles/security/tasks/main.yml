@@ -1,0 +1,73 @@
+---
+- name: Install security packages
+  ansible.builtin.package:
+    name: "{{ security_packages }}"
+    state: present
+
+# --- Host firewall ---------------------------------------------------------
+- name: Enable and start firewalld
+  ansible.builtin.service:
+    name: firewalld
+    state: started
+    enabled: true
+
+- name: Allow required application ports through firewalld
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ security_firewall_allowed_ports }}"
+
+# --- SSH hardening ---------------------------------------------------------
+- name: Harden SSH daemon configuration
+  ansible.builtin.template:
+    src: sshd_hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/50-hardening.conf
+    owner: root
+    group: root
+    mode: "0600"
+    validate: "/usr/sbin/sshd -t -f %s"
+  notify: Restart sshd
+
+# --- Kernel hardening ------------------------------------------------------
+- name: Apply sysctl hardening
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: true
+    sysctl_file: /etc/sysctl.d/99-hardening.conf
+  loop: "{{ security_sysctl | dict2items }}"
+
+# --- fail2ban --------------------------------------------------------------
+- name: Configure fail2ban jail
+  ansible.builtin.template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Enable and start fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true
+
+# --- Automatic security updates -------------------------------------------
+- name: Install dnf-automatic for unattended security patching
+  ansible.builtin.package:
+    name: dnf-automatic
+    state: present
+
+- name: Configure dnf-automatic to apply security updates
+  ansible.builtin.lineinfile:
+    path: /etc/dnf/automatic.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: '^upgrade_type', line: 'upgrade_type = security' }
+    - { regexp: '^apply_updates', line: 'apply_updates = yes' }
+  notify: Restart dnf-automatic timer

@@ -1,0 +1,30 @@
+---
+security_packages:
+  - fail2ban
+  - firewalld
+
+# Ports opened in the host firewall. The app port is reachable only from the
+# ALB SG at the network layer; firewalld is defense-in-depth on the host.
+security_firewall_allowed_ports:
+  - "8080/tcp"
+
+security_ssh_permit_root_login: "no"
+security_ssh_password_authentication: "no"
+security_ssh_x11_forwarding: "no"
+security_ssh_max_auth_tries: 3
+security_ssh_client_alive_interval: 300
+security_ssh_client_alive_count_max: 2
+
+security_fail2ban_bantime: 3600
+security_fail2ban_findtime: 600
+security_fail2ban_maxretry: 5
+
+# Kernel hardening applied via sysctl.
+security_sysctl:
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.tcp_syncookies: 1
+  net.ipv6.conf.all.accept_redirects: 0
+  kernel.randomize_va_space: 2

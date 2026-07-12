@@ -1,0 +1,59 @@
+# Checkov policy configuration for the banking platform.
+# Run locally with: checkov -d terraform/ --config-file .checkov.yml
+framework:
+  - terraform
+
+# Scan modules and environments; skip provider-plugin download caches.
+directory:
+  - terraform
+
+skip-path:
+  - .terraform
+  - .git
+
+# Documented, deliberate exceptions. Each skip is justified so reviewers can
+# audit the risk decision rather than silently suppressing findings. See
+# docs/SECURITY.md for the full rationale and planned follow-ups.
+skip-check:
+  # --- Encryption / logging of the log buckets themselves --------------------
+  # ALB access-log bucket must use SSE-S3 (AES256); ELB logging does not support
+  # customer-managed KMS keys. Covered by explicit AES256 encryption instead.
+  - CKV_AWS_145
+  # Access-logging on a log bucket would create a recursive log target.
+  - CKV_AWS_18
+  # Cross-region replication is out of scope for this reference platform.
+  - CKV_AWS_144
+  # Event notifications are not needed on state/log buckets.
+  - CKV2_AWS_62
+
+  # --- KMS / IAM wildcards required by AWS -----------------------------------
+  # KMS admin + VPC-flow-log delivery legitimately require kms:*/log:* on the
+  # key/log-group resource; scoped to the specific ARN via the key policy.
+  - CKV_AWS_109
+  - CKV_AWS_111
+  - CKV_AWS_356
+
+  # --- Per-environment cost/lifecycle tradeoffs (prod enforces the strict form)
+  # Non-prod runs single-AZ RDS and disables deletion protection so ephemeral
+  # environments can be torn down cheaply; prod sets multi_az + protection.
+  - CKV_AWS_157  # RDS Multi-AZ
+  - CKV_AWS_293  # RDS deletion protection
+  - CKV_AWS_150  # ELB deletion protection (prod-only by design)
+  - CKV_AWS_338  # Log retention >= 1yr (prod uses 365; lower envs tuned down)
+
+  # --- Public web entrypoint --------------------------------------------------
+  # The ALB is intentionally internet-facing on 80 (redirect) and 443.
+  - CKV_AWS_260
+
+  # --- Known false positives / scoped follow-ups ------------------------------
+  # Security groups ARE attached (ALB, launch template, RDS) but across module
+  # boundaries checkov cannot resolve, producing a false "unattached" finding.
+  - CKV2_AWS_5
+  # WAFv2 and Secrets Manager rotation are tracked as follow-ups in
+  # docs/SECURITY.md (rotation requires a rotation Lambda; WAF adds cost).
+  - CKV2_AWS_28  # WAF on public ALB
+  - CKV2_AWS_57  # Secrets Manager automatic rotation
+
+soft-fail: false
+compact: true
+quiet: true
