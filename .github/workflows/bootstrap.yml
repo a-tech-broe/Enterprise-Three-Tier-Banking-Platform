@@ -4,12 +4,18 @@ name: bootstrap
 # AWS CLI is ever required:
 #   1. Creates the GitHub OIDC identity provider (if missing).
 #   2. Sets the role's trust policy so this repo can assume it via OIDC.
-#   3. Attaches the least-privilege-ish deploy permissions policy.
+#   3. Creates/updates ONE scoped customer-managed policy and attaches it to the
+#      role (a single policies-per-role slot; scoped, not AdministratorAccess).
 #   4. (optional) Creates the S3 state bucket + DynamoDB lock table if missing.
 #
 # Auth: uses the static admin keys stored in secrets (AWS_ACCESS_KEY_ID /
 # AWS_SECRET_ACCESS_KEY). This is the ONLY workflow that uses them; once it has
 # run, delete those secrets and everything else runs on short-lived OIDC.
+#
+# The bootstrap identity must be allowed: iam:CreateOpenIDConnectProvider,
+# iam:GetOpenIDConnectProvider, iam:UpdateAssumeRolePolicy, iam:CreatePolicy,
+# iam:CreatePolicyVersion, iam:DeletePolicyVersion, iam:ListPolicyVersions,
+# iam:GetPolicy, iam:AttachRolePolicy (and s3:*/dynamodb:* if create_backend).
 #
 # Run: Actions -> bootstrap -> Run workflow.
 on:
@@ -114,23 +120,46 @@ jobs:
           aws iam update-assume-role-policy --role-name "$ROLE_NAME" --policy-document file://trust.json
           echo "Trust policy applied to $ROLE_NAME."
 
-      - name: Apply deploy permissions policy
+      - name: Apply deploy permissions (scoped customer-managed policy)
         env:
           ACCOUNT_ID: ${{ steps.ids.outputs.account_id }}
           ROLE_NAME: ${{ steps.ids.outputs.role_name }}
           STATE_BUCKET: ${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}
           LOCK_TABLE: ${{ vars.TF_LOCK_TABLE || secrets.TF_LOCK_TABLE }}
+          POLICY_NAME: banking-platform-deploy
         run: |
+          set -euo pipefail
+          # Render the scoped policy from the versioned template.
           sed -e "s|<ACCOUNT_ID>|${ACCOUNT_ID}|g" \
               -e "s|<STATE_BUCKET>|${STATE_BUCKET}|g" \
               -e "s|<LOCK_TABLE>|${LOCK_TABLE}|g" \
               docs/iam-deploy-policy.json > deploy-policy.json
           echo "Rendered deploy policy:"; cat deploy-policy.json
-          aws iam put-role-policy \
-            --role-name "$ROLE_NAME" \
-            --policy-name banking-platform-deploy \
-            --policy-document file://deploy-policy.json
-          echo "Deploy permissions applied to $ROLE_NAME."
+
+          POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${POLICY_NAME}"
+
+          # Create the managed policy, or roll a new default version if it exists.
+          # A single customer-managed policy uses ONE of the 10 policies-per-role
+          # slots and, unlike put-role-policy, only needs iam:CreatePolicy +
+          # iam:AttachRolePolicy (not iam:PutRolePolicy).
+          if aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1; then
+            echo "Policy exists - pruning old versions and setting a new default..."
+            # Managed policies allow at most 5 versions; delete non-default ones.
+            for v in $(aws iam list-policy-versions --policy-arn "$POLICY_ARN" \
+                        --query 'Versions[?!IsDefaultVersion].VersionId' --output text); do
+              aws iam delete-policy-version --policy-arn "$POLICY_ARN" --version-id "$v"
+            done
+            aws iam create-policy-version --policy-arn "$POLICY_ARN" \
+              --policy-document file://deploy-policy.json --set-as-default >/dev/null
+          else
+            echo "Creating managed policy ${POLICY_NAME}..."
+            aws iam create-policy --policy-name "$POLICY_NAME" \
+              --description "Terraform deploy permissions for the banking platform" \
+              --policy-document file://deploy-policy.json >/dev/null
+          fi
+
+          aws iam attach-role-policy --role-name "$ROLE_NAME" --policy-arn "$POLICY_ARN"
+          echo "Attached ${POLICY_NAME} to ${ROLE_NAME}."
 
       - name: (optional) Ensure Terraform backend exists
         if: ${{ inputs.create_backend }}
