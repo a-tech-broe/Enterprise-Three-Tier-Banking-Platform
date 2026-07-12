@@ -96,6 +96,11 @@ jobs:
           python-version: "3.12"
       - name: Install ansible-lint
         run: pip install "ansible-lint>=24.0" "ansible-core>=2.16"
+      - name: Install collection dependencies
+        working-directory: ansible
+        # Required so ansible-lint can resolve modules like ansible.posix.firewalld
+        # and community.general.* during its syntax-check pass.
+        run: ansible-galaxy collection install -r requirements.yml
       - name: Lint playbooks and roles
         working-directory: ansible
-        run: ansible-lint --offline site.yml roles/
+        run: ansible-lint site.yml roles/

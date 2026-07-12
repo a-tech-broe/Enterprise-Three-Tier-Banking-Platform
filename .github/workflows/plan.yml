@@ -52,8 +52,8 @@ jobs:
 
       - name: Preflight - verify required repository configuration
         env:
-          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
-          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}
         run: |
           missing=()
           [ -z "$AWS_ROLE_ARN" ]    && missing+=("AWS_ROLE_ARN")
@@ -69,7 +69,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: gha-plan-${{ matrix.environment }}
 
@@ -81,8 +81,8 @@ jobs:
         working-directory: terraform/environments/${{ matrix.environment }}
         run: |
           terraform init -input=false \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || secrets.TF_LOCK_TABLE }}" \
             -backend-config="region=${{ env.AWS_REGION }}"
 
       - name: Terraform plan
