@@ -1,0 +1,281 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VpcNetworkingManagement",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DescribeAvailabilityZones",
+                "ec2:DescribeAccountAttributes",
+                "ec2:CreateVpc",
+                "ec2:DeleteVpc",
+                "ec2:DescribeVpcs",
+                "ec2:ModifyVpcAttribute",
+                "ec2:DescribeVpcAttribute",
+                "ec2:CreateSubnet",
+                "ec2:DeleteSubnet",
+                "ec2:DescribeSubnets",
+                "ec2:ModifySubnetAttribute",
+                "ec2:CreateInternetGateway",
+                "ec2:DeleteInternetGateway",
+                "ec2:AttachInternetGateway",
+                "ec2:DetachInternetGateway",
+                "ec2:DescribeInternetGateways",
+                "ec2:CreateRouteTable",
+                "ec2:DeleteRouteTable",
+                "ec2:DescribeRouteTables",
+                "ec2:AssociateRouteTable",
+                "ec2:DisassociateRouteTable",
+                "ec2:CreateRoute",
+                "ec2:DeleteRoute",
+                "ec2:AllocateAddress",
+                "ec2:ReleaseAddress",
+                "ec2:DescribeAddresses",
+                "ec2:CreateNatGateway",
+                "ec2:DeleteNatGateway",
+                "ec2:DescribeNatGateways",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:CreateTags",
+                "ec2:DeleteTags",
+                "ec2:DescribeTags"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "Ec2ComputeAndSecurityGroups",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:RunInstances",
+                "ec2:TerminateInstances",
+                "ec2:StartInstances",
+                "ec2:StopInstances",
+                "ec2:DescribeInstances",
+                "ec2:DescribeInstanceStatus",
+                "ec2:DescribeInstanceTypes",
+                "ec2:DescribeInstanceAttribute",
+                "ec2:ModifyInstanceAttribute",
+                "ec2:DescribeImages",
+                "ec2:DescribeKeyPairs",
+                "ec2:CreateSecurityGroup",
+                "ec2:DeleteSecurityGroup",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeSecurityGroupRules",
+                "ec2:AuthorizeSecurityGroupIngress",
+                "ec2:AuthorizeSecurityGroupEgress",
+                "ec2:RevokeSecurityGroupIngress",
+                "ec2:RevokeSecurityGroupEgress",
+                "ec2:ModifySecurityGroupRules",
+                "ec2:UpdateSecurityGroupRuleDescriptionsIngress",
+                "ec2:UpdateSecurityGroupRuleDescriptionsEgress",
+                "ec2:CreateLaunchTemplate",
+                "ec2:CreateLaunchTemplateVersion",
+                "ec2:DeleteLaunchTemplate",
+                "ec2:DeleteLaunchTemplateVersions",
+                "ec2:DescribeLaunchTemplates",
+                "ec2:DescribeLaunchTemplateVersions",
+                "ec2:ModifyLaunchTemplate",
+                "ec2:GetLaunchTemplateData",
+                "ec2:CreateVolume",
+                "ec2:DeleteVolume",
+                "ec2:DescribeVolumes",
+                "ec2:CreateVpcEndpoint",
+                "ec2:DeleteVpcEndpoints",
+                "ec2:DescribeVpcEndpoints",
+                "ec2:ModifyVpcEndpoint",
+                "ec2:DescribePrefixLists",
+                "ec2:CreateFlowLogs",
+                "ec2:DeleteFlowLogs",
+                "ec2:DescribeFlowLogs",
+                "ec2:CreateNetworkInterface",
+                "ec2:DeleteNetworkInterface",
+                "ec2:ModifyNetworkInterfaceAttribute"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "LoadBalancingAndAutoScaling",
+            "Effect": "Allow",
+            "Action": [
+                "elasticloadbalancing:*",
+                "autoscaling:*",
+                "application-autoscaling:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "DatabaseEncryptionAndSecrets",
+            "Effect": "Allow",
+            "Action": [
+                "rds:*",
+                "kms:*",
+                "secretsmanager:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "MonitoringNotificationsAndDns",
+            "Effect": "Allow",
+            "Action": [
+                "cloudwatch:*",
+                "logs:*",
+                "sns:*",
+                "route53:*",
+                "acm:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "AlbLogsAndArtifactBuckets",
+            "Effect": "Allow",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::banking-platform-*",
+                "arn:aws:s3:::banking-platform-*/*"
+            ]
+        },
+        {
+            "Sid": "PassAndManagePlatformServiceRoles",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:GetRole",
+                "iam:TagRole",
+                "iam:UntagRole",
+                "iam:PassRole",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:GetRolePolicy",
+                "iam:ListRolePolicies",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:ListAttachedRolePolicies",
+                "iam:CreateInstanceProfile",
+                "iam:DeleteInstanceProfile",
+                "iam:GetInstanceProfile",
+                "iam:AddRoleToInstanceProfile",
+                "iam:RemoveRoleFromInstanceProfile",
+                "iam:ListInstanceProfilesForRole"
+            ],
+            "Resource": [
+                "arn:aws:iam::694992586025:role/banking-platform-*",
+                "arn:aws:iam::694992586025:instance-profile/banking-platform-*"
+            ]
+        },
+        {
+            "Sid": "CreateServiceLinkedRoles",
+            "Effect": "Allow",
+            "Action": "iam:CreateServiceLinkedRole",
+            "Resource": "*"
+        },
+        {
+            "Sid": "ManageGitHubOidcProvider",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateOpenIDConnectProvider",
+                "iam:GetOpenIDConnectProvider",
+                "iam:TagOpenIDConnectProvider",
+                "iam:UpdateOpenIDConnectProviderThumbprint",
+                "iam:AddClientIDToOpenIDConnectProvider",
+                "iam:DeleteOpenIDConnectProvider"
+            ],
+            "Resource": "arn:aws:iam::694992586025:oidc-provider/token.actions.githubusercontent.com"
+        },
+        {
+            "Sid": "ListOidcProviders",
+            "Effect": "Allow",
+            "Action": [
+                "iam:ListOpenIDConnectProviders"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ManageTerraformRole",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateRole",
+                "iam:GetRole",
+                "iam:DeleteRole",
+                "iam:TagRole",
+                "iam:UntagRole",
+                "iam:UpdateRole",
+                "iam:UpdateAssumeRolePolicy",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:ListAttachedRolePolicies",
+                "iam:ListRolePolicies",
+                "iam:ListInstanceProfilesForRole"
+            ],
+            "Resource": "arn:aws:iam::694992586025:role/github-actions-terraform"
+        },
+        {
+            "Sid": "ManageTerraformPolicies",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreatePolicy",
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion",
+                "iam:ListPolicyVersions",
+                "iam:CreatePolicyVersion",
+                "iam:DeletePolicyVersion",
+                "iam:DeletePolicy",
+                "iam:TagPolicy",
+                "iam:UntagPolicy"
+            ],
+            "Resource": [
+                "arn:aws:iam::694992586025:policy/github-actions-terraform-*",
+                "arn:aws:iam::694992586025:policy/banking-platform-*"
+            ]
+        },
+        {
+            "Sid": "ReadIamForTerraform",
+            "Effect": "Allow",
+            "Action": [
+                "iam:ListPolicies",
+                "iam:ListRoles",
+                "iam:GetOpenIDConnectProvider"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ManageStateBucket",
+            "Effect": "Allow",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::bokiti123",
+                "arn:aws:s3:::bokiti123/*"
+            ]
+        },
+        {
+            "Sid": "ManageLockTable",
+            "Effect": "Allow",
+            "Action": "dynamodb:*",
+            "Resource": "arn:aws:dynamodb:*:694992586025:table/family_dyning"
+        },
+        {
+            "Sid": "SelfManageAccessPolicy",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreatePolicy",
+                "iam:CreatePolicyVersion",
+                "iam:DeletePolicyVersion",
+                "iam:DeletePolicy",
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion",
+                "iam:ListPolicyVersions"
+            ],
+            "Resource": "arn:aws:iam::694992586025:policy/ParahAccess"
+        },
+        {
+            "Sid": "SelfAttachAccessPolicy",
+            "Effect": "Allow",
+            "Action": [
+                "iam:GetUser",
+                "iam:AttachUserPolicy",
+                "iam:DetachUserPolicy",
+                "iam:ListAttachedUserPolicies"
+            ],
+            "Resource": "arn:aws:iam::694992586025:user/Parah"
+        }
+    ]
+}

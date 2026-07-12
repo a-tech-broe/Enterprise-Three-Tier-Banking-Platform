@@ -4,20 +4,22 @@ name: bootstrap
 # AWS CLI is ever required:
 #   1. Creates the GitHub OIDC identity provider (if missing).
 #   2. Sets the role's trust policy so this repo can assume it via OIDC.
-#   3. Grants the role deploy permissions. Prefers a scoped customer-managed
-#      policy (docs/iam-deploy-policy.json, created by an admin) if it exists;
-#      otherwise attaches AWS-managed PowerUserAccess + IAMFullAccess as a
-#      fallback the bootstrap identity can attach without iam:CreatePolicy.
+#   3. Grants the role deploy permissions. Creates/rolls a scoped customer-managed
+#      policy from docs/iam-deploy-policy.json and attaches it (least privilege);
+#      if the identity cannot create policies, falls back to AWS-managed
+#      PowerUserAccess + IAMFullAccess, which it can attach directly.
 #   4. (optional) Creates the S3 state bucket + DynamoDB lock table if missing.
 #
 # Auth: uses the static admin keys stored in secrets (AWS_ACCESS_KEY_ID /
 # AWS_SECRET_ACCESS_KEY). This is the ONLY workflow that uses them; once it has
 # run, delete those secrets and everything else runs on short-lived OIDC.
 #
-# The bootstrap identity must be allowed: iam:CreateOpenIDConnectProvider,
-# iam:GetOpenIDConnectProvider, iam:UpdateAssumeRolePolicy, iam:GetPolicy,
-# iam:AttachRolePolicy (and s3:*/dynamodb:* if create_backend). For the scoped
-# path, an admin additionally runs iam:CreatePolicy once, out of band.
+# The bootstrap identity must be allowed (see docs/parah-access-policy.json):
+# iam:CreateOpenIDConnectProvider, iam:GetOpenIDConnectProvider,
+# iam:UpdateAssumeRolePolicy, iam:CreatePolicy, iam:CreatePolicyVersion,
+# iam:DeletePolicyVersion, iam:ListPolicyVersions, iam:GetPolicy,
+# iam:AttachRolePolicy (and s3:*/dynamodb:* if create_backend). Without
+# iam:CreatePolicy it still works via the managed-policy fallback.
 #
 # Run: Actions -> bootstrap -> Run workflow.
 on:
@@ -122,38 +124,54 @@ jobs:
           aws iam update-assume-role-policy --role-name "$ROLE_NAME" --policy-document file://trust.json
           echo "Trust policy applied to $ROLE_NAME."
 
-      - name: Apply deploy permissions (scoped-if-present, else managed fallback)
+      - name: Apply deploy permissions (scoped policy, managed fallback)
         env:
           ACCOUNT_ID: ${{ steps.ids.outputs.account_id }}
           ROLE_NAME: ${{ steps.ids.outputs.role_name }}
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}
+          LOCK_TABLE: ${{ vars.TF_LOCK_TABLE || secrets.TF_LOCK_TABLE }}
           POLICY_NAME: banking-platform-deploy
-          # Managed-policy fallback used when the scoped policy does not exist and
-          # the bootstrap identity cannot create one (no iam:CreatePolicy).
+          # Fallback used only if the bootstrap identity cannot create/roll the
+          # scoped policy (no iam:CreatePolicy on policy/banking-platform-*).
           FALLBACK_POLICIES: "PowerUserAccess IAMFullAccess"
         run: |
-          set -euo pipefail
+          set -uo pipefail
           POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${POLICY_NAME}"
 
-          # Preferred path: a scoped, customer-managed policy (see
-          # docs/iam-deploy-policy.json) that an admin has already created out of
-          # band -- because creating it needs iam:CreatePolicy, which the deploy
-          # bootstrap identity typically lacks. If present, attach just that one
-          # (scoped, single policies-per-role slot).
-          if aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1; then
-            echo "Scoped policy ${POLICY_NAME} found - attaching it."
-            aws iam attach-role-policy --role-name "$ROLE_NAME" --policy-arn "$POLICY_ARN"
-            echo "Attached ${POLICY_NAME} to ${ROLE_NAME}."
+          # Render the scoped, least-privilege policy from the versioned template.
+          sed -e "s|<ACCOUNT_ID>|${ACCOUNT_ID}|g" \
+              -e "s|<STATE_BUCKET>|${STATE_BUCKET}|g" \
+              -e "s|<LOCK_TABLE>|${LOCK_TABLE}|g" \
+              docs/iam-deploy-policy.json > deploy-policy.json
+
+          apply_scoped() {
+            if aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1; then
+              echo "Scoped policy exists - rolling a new default version."
+              for v in $(aws iam list-policy-versions --policy-arn "$POLICY_ARN" \
+                          --query 'Versions[?!IsDefaultVersion].VersionId' --output text); do
+                aws iam delete-policy-version --policy-arn "$POLICY_ARN" --version-id "$v" || return 1
+              done
+              aws iam create-policy-version --policy-arn "$POLICY_ARN" \
+                --policy-document file://deploy-policy.json --set-as-default >/dev/null || return 1
+            else
+              echo "Creating scoped managed policy ${POLICY_NAME}."
+              aws iam create-policy --policy-name "$POLICY_NAME" \
+                --description "Terraform deploy permissions for the banking platform" \
+                --policy-document file://deploy-policy.json >/dev/null || return 1
+            fi
+            aws iam attach-role-policy --role-name "$ROLE_NAME" --policy-arn "$POLICY_ARN" || return 1
+          }
+
+          if apply_scoped; then
+            echo "Attached scoped policy ${POLICY_NAME} to ${ROLE_NAME} (least privilege)."
           else
-            echo "Scoped policy not found (creating one needs iam:CreatePolicy)."
-            echo "Falling back to AWS-managed policies (attach-only): ${FALLBACK_POLICIES}"
+            echo "::warning::Could not create/attach the scoped policy (likely missing"
+            echo "::warning::iam:CreatePolicy on policy/banking-platform-*). Falling back to"
+            echo "::warning::AWS-managed policies: ${FALLBACK_POLICIES}"
             for p in $FALLBACK_POLICIES; do
               aws iam attach-role-policy --role-name "$ROLE_NAME" \
-                --policy-arn "arn:aws:iam::aws:policy/$p"
-              echo "attached $p"
+                --policy-arn "arn:aws:iam::aws:policy/$p" && echo "attached $p"
             done
-            echo "::notice::Using broad AWS-managed policies. For least privilege, have an"
-            echo "::notice::admin create the scoped policy from docs/iam-deploy-policy.json"
-            echo "::notice::(named ${POLICY_NAME}); re-running bootstrap will then prefer it."
           fi
 
       - name: (optional) Ensure Terraform backend exists
