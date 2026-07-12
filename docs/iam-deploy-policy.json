@@ -38,28 +38,25 @@
     {
       "Sid": "S3ForAlbLogsBucket",
       "Effect": "Allow",
-      "Action": [
-        "s3:CreateBucket", "s3:DeleteBucket", "s3:PutBucketPolicy", "s3:GetBucketPolicy",
-        "s3:DeleteBucketPolicy", "s3:PutBucketPublicAccessBlock", "s3:GetBucketPublicAccessBlock",
-        "s3:PutEncryptionConfiguration", "s3:GetEncryptionConfiguration",
-        "s3:PutBucketVersioning", "s3:GetBucketVersioning",
-        "s3:PutLifecycleConfiguration", "s3:GetLifecycleConfiguration",
-        "s3:PutBucketTagging", "s3:GetBucketTagging",
-        "s3:GetBucketAcl", "s3:PutBucketAcl", "s3:ListBucket", "s3:GetObject",
-        "s3:PutObject", "s3:DeleteObject", "s3:GetBucketLocation"
-      ],
-      "Resource": "arn:aws:s3:::banking-platform-*"
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::banking-platform-*",
+        "arn:aws:s3:::banking-platform-*/*"
+      ]
     },
     {
       "Sid": "IamForRolesAndProfiles",
       "Effect": "Allow",
       "Action": [
-        "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:TagRole", "iam:UntagRole",
+        "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:UpdateRole",
+        "iam:TagRole", "iam:UntagRole", "iam:ListRoleTags",
         "iam:CreatePolicy", "iam:DeletePolicy", "iam:GetPolicy", "iam:GetPolicyVersion",
         "iam:CreatePolicyVersion", "iam:DeletePolicyVersion", "iam:ListPolicyVersions",
+        "iam:TagPolicy", "iam:UntagPolicy",
         "iam:AttachRolePolicy", "iam:DetachRolePolicy", "iam:ListAttachedRolePolicies",
         "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:GetRolePolicy", "iam:ListRolePolicies",
         "iam:CreateInstanceProfile", "iam:DeleteInstanceProfile", "iam:GetInstanceProfile",
+        "iam:TagInstanceProfile", "iam:UntagInstanceProfile", "iam:ListInstanceProfileTags",
         "iam:AddRoleToInstanceProfile", "iam:RemoveRoleFromInstanceProfile",
         "iam:ListInstanceProfilesForRole",
         "iam:CreateServiceLinkedRole", "iam:PassRole", "iam:UpdateAssumeRolePolicy"
