@@ -51,18 +51,36 @@ resource "aws_lb_target_group" "app" {
   }
 }
 
-# HTTP listener redirects everything to HTTPS.
+locals {
+  # HTTPS is enabled when a certificate is supplied. Without one (e.g. a dev
+  # environment with no domain), the ALB serves the app over HTTP instead.
+  enable_https = var.certificate_arn != ""
+}
+
+# HTTP listener: redirect to HTTPS when a cert is configured; otherwise forward
+# straight to the app so the environment is usable without TLS.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.this.arn
   port              = 80
   protocol          = "HTTP"
 
-  default_action {
-    type = "redirect"
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+  dynamic "default_action" {
+    for_each = local.enable_https ? [1] : []
+    content {
+      type = "redirect"
+      redirect {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+  }
+
+  dynamic "default_action" {
+    for_each = local.enable_https ? [] : [1]
+    content {
+      type             = "forward"
+      target_group_arn = aws_lb_target_group.app.arn
     }
   }
 
@@ -70,6 +88,7 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_lb_listener" "https" {
+  count             = local.enable_https ? 1 : 0
   load_balancer_arn = aws_lb.this.arn
   port              = 443
   protocol          = "HTTPS"

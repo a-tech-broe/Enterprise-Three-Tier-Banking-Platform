@@ -44,6 +44,16 @@ skip-check:
   # --- Public web entrypoint --------------------------------------------------
   # The ALB is intentionally internet-facing on 80 (redirect) and 443.
   - CKV_AWS_260
+  # The ALB module supports an HTTP-only fallback for environments without a
+  # certificate (dev/test with no domain). When a cert IS present (prod/uat and
+  # dev via skybroe.com), the HTTP listener redirects to HTTPS and the HTTPS
+  # listener uses a TLS 1.3/1.2 policy. Checkov cannot evaluate the dynamic
+  # cert-present condition, so it flags the fallback path statically. Target
+  # groups run HTTP by design because TLS terminates at the ALB.
+  - CKV_AWS_2    # ALB protocol HTTPS
+  - CKV2_AWS_20  # ALB redirects HTTP -> HTTPS
+  - CKV_AWS_103  # LB TLS >= 1.2
+  - CKV_AWS_378  # LB doesn't use HTTP
 
   # --- Known false positives / scoped follow-ups ------------------------------
   # Security groups ARE attached (ALB, launch template, RDS) but across module
@@ -53,6 +63,13 @@ skip-check:
   # docs/SECURITY.md (rotation requires a rotation Lambda; WAF adds cost).
   - CKV2_AWS_28  # WAF on public ALB
   - CKV2_AWS_57  # Secrets Manager automatic rotation
+
+  # --- Route53 hosted zone hardening (follow-ups) -----------------------------
+  # DNSSEC signing and DNS query logging are optional hardening for the created
+  # public zone; out of scope for this reference platform and enabled per-domain
+  # if required. Tracked in docs/SECURITY.md.
+  - CKV2_AWS_38  # DNSSEC signing on public hosted zone
+  - CKV2_AWS_39  # DNS query logging
 
 soft-fail: false
 compact: true

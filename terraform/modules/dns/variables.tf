@@ -1,11 +1,23 @@
 variable "zone_name" {
-  description = "Public hosted zone name (e.g. bank.example.com). Must already exist in Route53."
+  description = "Public hosted zone name (e.g. skybroe.com). Created when create_hosted_zone=true, otherwise looked up."
   type        = string
 }
 
 variable "record_name" {
-  description = "Fully-qualified record to create for the application (e.g. app.dev.bank.example.com)."
+  description = "Fully-qualified record for the application (e.g. www.skybroe.com)."
   type        = string
+}
+
+variable "create_hosted_zone" {
+  description = "Create the public hosted zone. Set true when no zone exists yet; false to reuse an existing one (Terraform cannot auto-detect because a missing data-source zone is a hard error)."
+  type        = bool
+  default     = false
+}
+
+variable "update_registered_domain_ns" {
+  description = "When creating the zone, point the Route53-registered domain's name servers at it so ACM DNS validation resolves publicly. Requires the domain to be registered in Route53 Domains in this account (us-east-1 endpoint)."
+  type        = bool
+  default     = false
 }
 
 variable "create_certificate" {
@@ -18,16 +30,6 @@ variable "subject_alternative_names" {
   description = "Additional SANs for the certificate."
   type        = list(string)
   default     = []
-}
-
-variable "alb_dns_name" {
-  description = "ALB DNS name for the alias record."
-  type        = string
-}
-
-variable "alb_zone_id" {
-  description = "ALB canonical hosted zone ID for the alias record."
-  type        = string
 }
 
 variable "tags" {

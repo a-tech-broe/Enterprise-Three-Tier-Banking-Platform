@@ -3,12 +3,12 @@ output "certificate_arn" {
   value       = var.create_certificate ? aws_acm_certificate_validation.this[0].certificate_arn : null
 }
 
-output "record_fqdn" {
-  description = "FQDN of the application alias record."
-  value       = aws_route53_record.app.fqdn
+output "zone_id" {
+  description = "Route53 hosted zone ID (used by the root module for the alias record)."
+  value       = local.zone_id
 }
 
-output "zone_id" {
-  description = "Route53 hosted zone ID."
-  value       = data.aws_route53_zone.this.zone_id
+output "name_servers" {
+  description = "Name servers of the created zone (empty when reusing an existing zone). Delegate the domain to these if not done automatically."
+  value       = local.name_servers
 }

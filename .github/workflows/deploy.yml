@@ -144,7 +144,15 @@ jobs:
       - name: Install Ansible & session-manager-plugin
         run: |
           pip install "ansible-core>=2.16" boto3 botocore
-          ansible-galaxy collection install -r ansible/requirements.yml
+          # Galaxy CDN occasionally returns a corrupt tarball ("Mismatch artifact
+          # hash"); retry with a clean cache before giving up.
+          for i in 1 2 3 4 5; do
+            rm -rf ~/.ansible/tmp/ansible-local-* 2>/dev/null || true
+            ansible-galaxy collection install -r ansible/requirements.yml --force && break
+            echo "ansible-galaxy attempt $i failed; retrying in $((i*10))s..."
+            sleep $((i*10))
+          done
+          ansible-galaxy collection list amazon.aws >/dev/null
           curl -s "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o smp.deb
           sudo dpkg -i smp.deb
       - name: Wait for instances to register in the ASG
