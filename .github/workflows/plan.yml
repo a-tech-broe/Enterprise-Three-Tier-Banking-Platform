@@ -91,7 +91,7 @@ jobs:
         working-directory: terraform/environments/${{ matrix.environment }}
         run: |
           set +e
-          terraform plan -input=false -no-color -detailed-exitcode -out=tfplan.bin | tee plan.txt
+          terraform plan -input=false -detailed-exitcode -out=tfplan.bin | tee plan.txt
           code=${PIPESTATUS[0]}
           echo "exitcode=$code" >> "$GITHUB_OUTPUT"
           # 0 = no changes, 2 = changes, 1 = error
@@ -108,17 +108,22 @@ jobs:
 
       - name: Comment plan on PR
         if: github.event_name == 'pull_request'
+        continue-on-error: true # never fail a good plan just because commenting failed
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            const env = '${{ matrix.environment }}';
-            let plan = fs.readFileSync('terraform/environments/' + env + '/plan.txt', 'utf8');
-            if (plan.length > 60000) plan = plan.substring(0, 60000) + "\n... (truncated)";
-            const body = `### Terraform plan — \`${env}\`\n<details><summary>Show plan</summary>\n\n\`\`\`\n${plan}\n\`\`\`\n</details>`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            });
+            try {
+              const fs = require('fs');
+              const env = '${{ matrix.environment }}';
+              let plan = fs.readFileSync('terraform/environments/' + env + '/plan.txt', 'utf8');
+              if (plan.length > 60000) plan = plan.substring(0, 60000) + "\n... (truncated)";
+              const body = `### Terraform plan — \`${env}\`\n<details><summary>Show plan</summary>\n\n\`\`\`\n${plan}\n\`\`\`\n</details>`;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            } catch (e) {
+              core.warning(`Could not post plan comment: ${e.message}`);
+            }
