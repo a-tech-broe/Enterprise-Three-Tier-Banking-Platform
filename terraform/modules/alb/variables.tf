@@ -19,8 +19,15 @@ variable "security_group_ids" {
 }
 
 variable "certificate_arn" {
-  description = "ACM certificate ARN for the HTTPS listener."
+  description = "ACM certificate ARN for the HTTPS listener. May be a computed ARN; ignored when enable_https is false."
   type        = string
+  default     = ""
+}
+
+variable "enable_https" {
+  description = "Whether to create the HTTPS listener (must be known at plan time). When false, the ALB serves HTTP directly to the app."
+  type        = bool
+  default     = true
 }
 
 variable "app_port" {
