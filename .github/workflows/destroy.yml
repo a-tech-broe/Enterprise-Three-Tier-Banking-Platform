@@ -1,4 +1,4 @@
-name: destroy
+name: infra-destroy
 
 # Guarded teardown. Requires typing the environment name to confirm, and is
 # gated by the GitHub Environment's required reviewers. Prod destroys should

@@ -1,4 +1,4 @@
-name: plan
+name: infra-plan
 
 # Produces a Terraform plan for a given environment and (on PRs) comments the
 # summary. Reusable via workflow_call so deploy.yml can plan before applying.

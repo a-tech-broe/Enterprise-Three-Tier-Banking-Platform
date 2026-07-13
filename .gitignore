@@ -57,3 +57,13 @@ terraform.rc
 # planout
 # Module-level provider lock files (only commit env/root locks)
 terraform/modules/*/.terraform.lock.hcl
+
+# Python (app/)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
