@@ -40,7 +40,10 @@ resource "random_password" "master" {
 }
 
 resource "aws_secretsmanager_secret" "db" {
-  name                    = "${var.name}/rds/credentials"
+  # name_prefix (not name) so a recreate always gets a fresh, unique name and is
+  # never blocked by a prior secret still inside its deletion recovery window.
+  # Consumers read this secret by ARN/output, not by a fixed name.
+  name_prefix             = "${var.name}/rds/master-credentials-"
   description             = "Master credentials for ${var.name} RDS PostgreSQL"
   kms_key_id              = var.kms_key_arn
   recovery_window_in_days = var.secret_recovery_window_days
