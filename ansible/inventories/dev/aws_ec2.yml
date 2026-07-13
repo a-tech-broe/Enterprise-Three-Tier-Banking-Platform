@@ -8,9 +8,9 @@ filters:
   tag:Role: app
   instance-state-name: running
 keyed_groups:
-  - key: tags.Environment
+  - key: ec2_tags.Environment
     prefix: env
-  - key: tags.Role
+  - key: ec2_tags.Role
     prefix: role
 hostnames:
   - instance-id
