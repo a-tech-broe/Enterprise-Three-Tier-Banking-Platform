@@ -56,3 +56,8 @@ output "alb_logs_bucket" {
   description = "S3 bucket receiving ALB access logs."
   value       = aws_s3_bucket.alb_logs.id
 }
+
+output "ansible_ssm_bucket" {
+  description = "S3 bucket used by the aws_ssm Ansible connection for file transfer."
+  value       = aws_s3_bucket.ansible_ssm.id
+}

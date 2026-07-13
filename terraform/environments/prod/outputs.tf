@@ -27,3 +27,8 @@ output "sns_alarm_topic_arn" {
   description = "SNS alarm topic ARN."
   value       = module.platform.sns_alarm_topic_arn
 }
+
+output "ansible_ssm_bucket" {
+  description = "S3 bucket for the aws_ssm Ansible connection."
+  value       = module.platform.ansible_ssm_bucket
+}

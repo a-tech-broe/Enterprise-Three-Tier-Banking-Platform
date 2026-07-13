@@ -73,10 +73,23 @@ data "aws_iam_policy_document" "app" {
       )
     }
   }
+
+  dynamic "statement" {
+    for_each = var.ssm_bucket_arn != "" ? [1] : []
+    content {
+      sid    = "AnsibleSsmTransfer"
+      effect = "Allow"
+      actions = [
+        "s3:GetObject", "s3:PutObject", "s3:DeleteObject",
+        "s3:ListBucket", "s3:GetBucketLocation",
+      ]
+      resources = [var.ssm_bucket_arn, "${var.ssm_bucket_arn}/*"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "app" {
-  count  = length(var.secret_arns) + length(var.kms_key_arns) + length(var.artifact_bucket_arns) > 0 ? 1 : 0
+  count  = length(var.secret_arns) + length(var.kms_key_arns) + length(var.artifact_bucket_arns) + (var.ssm_bucket_arn != "" ? 1 : 0) > 0 ? 1 : 0
   name   = "${var.name}-app"
   role   = aws_iam_role.instance.id
   policy = data.aws_iam_policy_document.app.json
