@@ -20,16 +20,6 @@ variable "subject_alternative_names" {
   default     = []
 }
 
-variable "alb_dns_name" {
-  description = "ALB DNS name for the alias record."
-  type        = string
-}
-
-variable "alb_zone_id" {
-  description = "ALB canonical hosted zone ID for the alias record."
-  type        = string
-}
-
 variable "tags" {
   description = "Tags applied to DNS/ACM resources."
   type        = map(string)

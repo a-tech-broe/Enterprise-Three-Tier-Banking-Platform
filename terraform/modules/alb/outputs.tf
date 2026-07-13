@@ -29,6 +29,6 @@ output "target_group_arn_suffix_computed" {
 }
 
 output "https_listener_arn" {
-  description = "ARN of the HTTPS listener."
-  value       = aws_lb_listener.https.arn
+  description = "ARN of the HTTPS listener (null when running HTTP-only)."
+  value       = one(aws_lb_listener.https[*].arn)
 }

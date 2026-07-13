@@ -15,7 +15,11 @@ output "alb_dns_name" {
 
 output "app_url" {
   description = "URL applications are reachable at."
-  value       = var.enable_dns ? "https://${module.dns[0].record_fqdn}" : "https://${module.alb.alb_dns_name}"
+  value = (
+    var.enable_dns ? "https://${var.record_name}" :
+    local.certificate_arn != "" ? "https://${module.alb.alb_dns_name}" :
+    "http://${module.alb.alb_dns_name}"
+  )
 }
 
 output "asg_name" {

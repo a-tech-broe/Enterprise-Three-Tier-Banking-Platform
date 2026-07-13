@@ -194,22 +194,37 @@ resource "aws_s3_bucket_policy" "alb_logs" {
 }
 
 # ---------------------------------------------------------------------------
-# DNS + ACM certificate (optional; when disabled, certificate_arn must be set)
+# ACM certificate (optional; when disabled, certificate_arn must be set or the
+# ALB serves HTTP only). Cert-only module so it has no dependency on the ALB.
 # ---------------------------------------------------------------------------
 module "dns" {
   source = "../dns"
   count  = var.enable_dns ? 1 : 0
 
-  zone_name    = var.zone_name
-  record_name  = var.record_name
-  alb_dns_name = module.alb.alb_dns_name
-  alb_zone_id  = module.alb.alb_zone_id
+  zone_name   = var.zone_name
+  record_name = var.record_name
 
   tags = local.common_tags
 }
 
 locals {
   certificate_arn = var.enable_dns ? module.dns[0].certificate_arn : var.certificate_arn
+}
+
+# Alias record -> ALB. Created here (after the ALB) rather than inside the dns
+# module to break the cert<->ALB cycle.
+resource "aws_route53_record" "app" {
+  count = var.enable_dns ? 1 : 0
+
+  zone_id = module.dns[0].zone_id
+  name    = var.record_name
+  type    = "A"
+
+  alias {
+    name                   = module.alb.alb_dns_name
+    zone_id                = module.alb.alb_zone_id
+    evaluate_target_health = true
+  }
 }
 
 # ---------------------------------------------------------------------------

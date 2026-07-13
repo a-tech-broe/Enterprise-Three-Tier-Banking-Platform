@@ -41,9 +41,12 @@ module "platform" {
   db_deletion_protection = false
   db_skip_final_snapshot = true
 
-  # TLS / DNS: supply a real ACM cert ARN, or set enable_dns=true with a zone.
-  enable_dns      = false
-  certificate_arn = var.certificate_arn
+  # TLS / DNS: use the skybroe.com hosted zone in this account. The platform
+  # requests an ACM cert for record_name, DNS-validates it, wires it to the ALB
+  # HTTPS listener, and creates the alias record.
+  enable_dns  = true
+  zone_name   = "skybroe.com"
+  record_name = "www.skybroe.com"
 
   # Observability
   alarm_email_endpoints = var.alarm_email_endpoints

@@ -41,17 +41,6 @@ resource "aws_acm_certificate_validation" "this" {
   validation_record_fqdns = [for r in aws_route53_record.validation : r.fqdn]
 }
 
-# ---------------------------------------------------------------------------
-# Alias record pointing at the ALB
-# ---------------------------------------------------------------------------
-resource "aws_route53_record" "app" {
-  zone_id = data.aws_route53_zone.this.zone_id
-  name    = var.record_name
-  type    = "A"
-
-  alias {
-    name                   = var.alb_dns_name
-    zone_id                = var.alb_zone_id
-    evaluate_target_health = true
-  }
-}
+# The alias A record that points the app hostname at the ALB is created in the
+# root module (after the ALB), not here, to avoid a cert<->ALB dependency cycle:
+# the ALB needs this certificate, and the alias record needs the ALB.
