@@ -90,14 +90,15 @@ resource "aws_autoscaling_group" "this" {
     version = "$Latest"
   }
 
-  # Roll instances automatically when the launch template changes (immutable infra).
+  # Roll instances automatically when the launch template changes (immutable
+  # infra). launch_template changes always trigger a refresh implicitly, so no
+  # explicit `triggers` is needed.
   instance_refresh {
     strategy = "Rolling"
     preferences {
       min_healthy_percentage = var.instance_refresh_min_healthy_percentage
       instance_warmup        = var.health_check_grace_period
     }
-    triggers = ["launch_template"]
   }
 
   dynamic "tag" {
