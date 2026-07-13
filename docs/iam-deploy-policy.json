@@ -37,6 +37,21 @@
       "Resource": "*"
     },
     {
+      "Sid": "SsmSessionForAnsible",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:StartSession",
+        "ssm:TerminateSession",
+        "ssm:ResumeSession",
+        "ssm:DescribeSessions",
+        "ssm:GetConnectionStatus",
+        "ssm:DescribeInstanceInformation",
+        "ssm:SendCommand",
+        "ssm:GetCommandInvocation"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "S3ForAlbLogsBucket",
       "Effect": "Allow",
       "Action": "s3:*",
