@@ -92,6 +92,7 @@ jobs:
     outputs:
       asg_name: ${{ steps.outputs.outputs.asg_name }}
       app_url: ${{ steps.outputs.outputs.app_url }}
+      ssm_bucket: ${{ steps.outputs.outputs.ssm_bucket }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure AWS credentials (OIDC)
@@ -122,6 +123,7 @@ jobs:
         run: |
           echo "asg_name=$(terraform output -raw asg_name)" >> "$GITHUB_OUTPUT"
           echo "app_url=$(terraform output -raw app_url)" >> "$GITHUB_OUTPUT"
+          echo "ssm_bucket=$(terraform output -raw ansible_ssm_bucket)" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
   # 3) Configure instances with Ansible over SSM.
@@ -167,8 +169,11 @@ jobs:
           done
       - name: Run Ansible
         working-directory: ansible
+        env:
+          ANSIBLE_AWS_SSM_BUCKET: ${{ needs.apply.outputs.ssm_bucket }}
         run: |
-          ansible-playbook -i inventories/${{ needs.plan.outputs.target }}/aws_ec2.yml site.yml
+          ansible-playbook -i inventories/${{ needs.plan.outputs.target }}/aws_ec2.yml site.yml \
+            -e "ansible_aws_ssm_bucket_name=${ANSIBLE_AWS_SSM_BUCKET}"
 
   # ---------------------------------------------------------------------------
   # 4) Smoke test the public endpoint.

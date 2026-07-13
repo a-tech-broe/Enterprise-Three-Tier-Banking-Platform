@@ -21,6 +21,12 @@ variable "artifact_bucket_arns" {
   default     = []
 }
 
+variable "ssm_bucket_arn" {
+  description = "ARN of the S3 bucket used by the aws_ssm Ansible connection for file transfer (instances need read/write). Empty to skip."
+  type        = string
+  default     = ""
+}
+
 variable "enable_cloudwatch_agent" {
   description = "Attach the CloudWatchAgentServerPolicy managed policy."
   type        = bool
