@@ -101,8 +101,14 @@ jobs:
       - name: Install collection dependencies
         working-directory: ansible
         # Required so ansible-lint can resolve modules like ansible.posix.firewalld
-        # and community.general.* during its syntax-check pass.
-        run: ansible-galaxy collection install -r requirements.yml
+        # and community.general.* during its syntax-check pass. Retry to absorb
+        # transient Galaxy "Mismatch artifact hash" download failures.
+        run: |
+          for i in 1 2 3 4 5; do
+            ansible-galaxy collection install -r requirements.yml --force && break
+            echo "ansible-galaxy attempt $i failed; retrying in $((i*10))s..."
+            sleep $((i*10))
+          done
       - name: Lint playbooks and roles
         working-directory: ansible
         run: ansible-lint site.yml roles/
