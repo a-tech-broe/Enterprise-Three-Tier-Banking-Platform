@@ -211,6 +211,9 @@ module "dns" {
 
 locals {
   certificate_arn = var.enable_dns ? module.dns[0].certificate_arn : var.certificate_arn
+  # Known at plan time (both inputs are static), unlike certificate_arn which is
+  # a computed ACM ARN when enable_dns = true.
+  enable_https = var.enable_dns || var.certificate_arn != ""
 }
 
 # Alias record -> ALB. Created here (after the ALB) rather than inside the dns
@@ -240,6 +243,7 @@ module "alb" {
   public_subnet_ids  = module.vpc.public_subnet_ids
   security_group_ids = [module.security_groups.alb_sg_id]
   certificate_arn    = local.certificate_arn
+  enable_https       = local.enable_https
   app_port           = var.app_port
   health_check_path  = var.health_check_path
   access_logs_bucket = aws_s3_bucket.alb_logs.id
