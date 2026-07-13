@@ -67,3 +67,9 @@ venv/
 .ruff_cache/
 *.egg-info/
 .coverage
+
+# JS/TS build + deps (app/)
+node_modules/
+dist/
+.expo/
+build/
