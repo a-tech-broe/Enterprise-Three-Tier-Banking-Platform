@@ -201,8 +201,10 @@ module "dns" {
   source = "../dns"
   count  = var.enable_dns ? 1 : 0
 
-  zone_name   = var.zone_name
-  record_name = var.record_name
+  zone_name                   = var.zone_name
+  record_name                 = var.record_name
+  create_hosted_zone          = var.create_hosted_zone
+  update_registered_domain_ns = var.update_registered_domain_ns
 
   tags = local.common_tags
 }

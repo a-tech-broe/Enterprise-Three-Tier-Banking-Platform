@@ -41,12 +41,15 @@ module "platform" {
   db_deletion_protection = false
   db_skip_final_snapshot = true
 
-  # TLS / DNS: use the skybroe.com hosted zone in this account. The platform
-  # requests an ACM cert for record_name, DNS-validates it, wires it to the ALB
-  # HTTPS listener, and creates the alias record.
-  enable_dns  = true
-  zone_name   = "skybroe.com"
-  record_name = "www.skybroe.com"
+  # TLS / DNS: no hosted zone exists in this account yet, so create one for
+  # skybroe.com and point the Route53-registered domain's name servers at it,
+  # then request + DNS-validate an ACM cert for www.skybroe.com and wire it to
+  # the ALB HTTPS listener. Set create_hosted_zone=false once the zone exists.
+  enable_dns                  = true
+  create_hosted_zone          = true
+  update_registered_domain_ns = true
+  zone_name                   = "skybroe.com"
+  record_name                 = "www.skybroe.com"
 
   # Observability
   alarm_email_endpoints = var.alarm_email_endpoints

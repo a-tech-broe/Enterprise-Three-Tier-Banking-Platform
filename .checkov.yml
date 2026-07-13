@@ -64,6 +64,13 @@ skip-check:
   - CKV2_AWS_28  # WAF on public ALB
   - CKV2_AWS_57  # Secrets Manager automatic rotation
 
+  # --- Route53 hosted zone hardening (follow-ups) -----------------------------
+  # DNSSEC signing and DNS query logging are optional hardening for the created
+  # public zone; out of scope for this reference platform and enabled per-domain
+  # if required. Tracked in docs/SECURITY.md.
+  - CKV2_AWS_38  # DNSSEC signing on public hosted zone
+  - CKV2_AWS_39  # DNS query logging
+
 soft-fail: false
 compact: true
 quiet: true

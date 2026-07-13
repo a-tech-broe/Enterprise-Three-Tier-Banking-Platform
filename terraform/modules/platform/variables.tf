@@ -156,6 +156,18 @@ variable "zone_name" {
   default     = ""
 }
 
+variable "create_hosted_zone" {
+  description = "Create the hosted zone (true) vs reuse an existing one (false). Only used when enable_dns = true."
+  type        = bool
+  default     = false
+}
+
+variable "update_registered_domain_ns" {
+  description = "Point the Route53-registered domain's name servers at the created zone (requires the domain in Route53 Domains). Only used with create_hosted_zone."
+  type        = bool
+  default     = false
+}
+
 variable "record_name" {
   description = "App FQDN to publish (required when enable_dns = true)."
   type        = string

@@ -1,6 +1,41 @@
+# ---------------------------------------------------------------------------
+# Hosted zone: create it, or look up an existing one.
+#
+# Terraform has no native "use if it exists, else create" for a data source
+# (a missing data-source zone is a hard error), so the behaviour is controlled
+# by create_hosted_zone. Set it true for a fresh account with no zone.
+# ---------------------------------------------------------------------------
+resource "aws_route53_zone" "this" {
+  count = var.create_hosted_zone ? 1 : 0
+  name  = var.zone_name
+  tags  = merge(var.tags, { Name = var.zone_name })
+}
+
 data "aws_route53_zone" "this" {
+  count        = var.create_hosted_zone ? 0 : 1
   name         = var.zone_name
   private_zone = false
+}
+
+locals {
+  zone_id      = var.create_hosted_zone ? aws_route53_zone.this[0].zone_id : data.aws_route53_zone.this[0].zone_id
+  name_servers = var.create_hosted_zone ? aws_route53_zone.this[0].name_servers : []
+}
+
+# ---------------------------------------------------------------------------
+# Delegate the registered domain to the new zone (optional).
+# Only valid when the domain is registered in Route53 Domains in this account.
+# ---------------------------------------------------------------------------
+resource "aws_route53domains_registered_domain" "this" {
+  count       = var.create_hosted_zone && var.update_registered_domain_ns ? 1 : 0
+  domain_name = var.zone_name
+
+  dynamic "name_server" {
+    for_each = local.name_servers
+    content {
+      name = name_server.value
+    }
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -27,7 +62,7 @@ resource "aws_route53_record" "validation" {
     }
   } : {}
 
-  zone_id         = data.aws_route53_zone.this.zone_id
+  zone_id         = local.zone_id
   name            = each.value.name
   type            = each.value.type
   records         = [each.value.record]
@@ -39,6 +74,14 @@ resource "aws_acm_certificate_validation" "this" {
   count                   = var.create_certificate ? 1 : 0
   certificate_arn         = aws_acm_certificate.this[0].arn
   validation_record_fqdns = [for r in aws_route53_record.validation : r.fqdn]
+
+  # Ensure the registrar is delegated to this zone before we wait for ACM to
+  # validate over public DNS (otherwise validation cannot resolve the records).
+  depends_on = [aws_route53domains_registered_domain.this]
+
+  timeouts {
+    create = "60m"
+  }
 }
 
 # The alias A record that points the app hostname at the ALB is created in the
