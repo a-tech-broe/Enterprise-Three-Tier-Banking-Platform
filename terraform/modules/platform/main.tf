@@ -101,10 +101,10 @@ module "rds" {
 module "iam" {
   source = "../iam"
 
-  name           = local.name_prefix
-  secret_arns    = [module.rds.secret_arn]
-  kms_key_arns   = [module.kms.key_arn]
-  ssm_bucket_arn = aws_s3_bucket.ansible_ssm.arn
+  name            = local.name_prefix
+  secret_arns     = [module.rds.secret_arn]
+  kms_key_arns    = [module.kms.key_arn]
+  ssm_bucket_arns = [aws_s3_bucket.ansible_ssm.arn]
 
   tags = local.common_tags
 }
