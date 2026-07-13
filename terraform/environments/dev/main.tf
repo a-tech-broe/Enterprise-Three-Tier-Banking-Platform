@@ -41,15 +41,12 @@ module "platform" {
   db_deletion_protection = false
   db_skip_final_snapshot = true
 
-  # TLS / DNS: no hosted zone exists in this account yet, so create one for
-  # skybroe.com and point the Route53-registered domain's name servers at it,
-  # then request + DNS-validate an ACM cert for www.skybroe.com and wire it to
-  # the ALB HTTPS listener. Set create_hosted_zone=false once the zone exists.
-  enable_dns                  = true
-  create_hosted_zone          = true
-  update_registered_domain_ns = true
-  zone_name                   = "skybroe.com"
-  record_name                 = "www.skybroe.com"
+  # TLS / DNS: HTTP-only for now. Delegating skybroe.com to a Route53 hosted zone
+  # needs route53domains permissions the CI identity doesn't have, so the app is
+  # served over HTTP at the ALB DNS name. To enable HTTPS later: delegate the
+  # registered domain to a hosted zone, then set enable_dns=true (plus
+  # create_hosted_zone / zone_name / record_name). The module already supports it.
+  enable_dns = false
 
   # Observability
   alarm_email_endpoints = var.alarm_email_endpoints
