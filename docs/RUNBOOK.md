@@ -56,10 +56,34 @@ make apply ENV=dev
 make configure ENV=dev              # Ansible
 ```
 
+The `configure` step connects over SSM using the `community.aws.aws_ssm` plugin.
+Terraform creates the required S3 transfer bucket (`banking-platform-<env>-ansible-ssm-<acct>`)
+and grants the instance role access; CI and the Makefile pass its name to Ansible
+automatically — no manual setup.
+
+## Enabling HTTPS on a domain
+
+Environments default to **HTTP** (the ALB serves the app at its AWS DNS name), so
+they deploy without a domain. To serve HTTPS on your own domain:
+
+1. In `terraform/environments/<env>/main.tf` set `enable_dns = true`, plus
+   `zone_name` / `record_name`, and `create_hosted_zone = true` if no public zone
+   exists yet.
+2. `apply` once — it creates the hosted zone, cert request, and validation
+   records. Read the `zone_name_servers` output.
+3. **Delegate the registered domain to those name servers at your registrar**
+   (Route 53 Domains → *Edit name servers*, or your external registrar). This is a
+   one-time, out-of-band step — registrar management is intentionally not in the
+   pipeline.
+4. `apply` again — ACM validates over public DNS, the HTTPS listener and the
+   `record_name` alias are created, and `app_url` becomes `https://<record_name>`.
+
 ## Common tasks
 
 **Roll the fleet (new AMI / config):** update the launch template input and apply;
-the ASG performs a rolling instance refresh automatically. Watch:
+the ASG performs a rolling instance refresh automatically. Instances self-bootstrap
+nginx + `/health` from user-data, so refreshed/scaled instances pass ALB health
+checks without waiting for Ansible. Watch:
 
 ```bash
 aws autoscaling describe-instance-refreshes --auto-scaling-group-name <asg>

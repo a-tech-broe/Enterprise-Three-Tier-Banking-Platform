@@ -59,9 +59,15 @@ variable "alb_ingress_cidrs" {
 
 # --- Application / compute ---------------------------------------------------
 variable "app_port" {
-  description = "Port the application listens on."
+  description = "Port the ALB targets and nginx listens on."
   type        = number
   default     = 8080
+}
+
+variable "app_upstream_port" {
+  description = "Local port the application process listens on, which nginx reverse-proxies to."
+  type        = number
+  default     = 8081
 }
 
 variable "instance_type" {
@@ -157,13 +163,7 @@ variable "zone_name" {
 }
 
 variable "create_hosted_zone" {
-  description = "Create the hosted zone (true) vs reuse an existing one (false). Only used when enable_dns = true."
-  type        = bool
-  default     = false
-}
-
-variable "update_registered_domain_ns" {
-  description = "Point the Route53-registered domain's name servers at the created zone (requires the domain in Route53 Domains). Only used with create_hosted_zone."
+  description = "Create the hosted zone (true) vs reuse an existing one (false). Only used when enable_dns = true. Delegate the registrar to the zone's name_servers out of band."
   type        = bool
   default     = false
 }

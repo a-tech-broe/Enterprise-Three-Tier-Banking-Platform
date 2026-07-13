@@ -27,17 +27,24 @@ Destroys require typing the environment name and a second approval.
 
 These are suppressed in `.checkov.yml` with rationale:
 
-- **CKV_AWS_145 / CKV_AWS_18** — the ALB access-log bucket uses SSE-S3 because ELB
-  logging does not support customer KMS keys; log buckets are not themselves
-  access-logged to avoid recursion.
+- **CKV_AWS_145 / CKV_AWS_18 / CKV2_AWS_62 / CKV_AWS_144** — the ALB access-log and
+  SSM-transfer buckets use SSE-S3 (ELB logging does not support customer KMS
+  keys); log buckets are not themselves access-logged (recursion); event
+  notifications and cross-region replication are out of scope for these buckets.
 - **CKV_AWS_157 / 293 / 150 / 338** — Multi-AZ, deletion protection, and 1-year log
   retention are **enforced in prod** but relaxed in dev/qa to keep ephemeral
   environments cheap and disposable.
+- **CKV_AWS_2 / CKV2_AWS_20 / CKV_AWS_103 / CKV_AWS_378** — the ALB module supports an
+  HTTP-only fallback for environments without a certificate (dev/test). When a
+  cert is present it redirects 80→443 and serves TLS 1.3/1.2; checkov cannot
+  evaluate the dynamic cert-present condition, and target groups run HTTP by
+  design because TLS terminates at the ALB.
 - **CKV_AWS_260** — the ALB is intentionally internet-facing on 80/443.
 - **CKV_AWS_109 / 111 / 356** — KMS administration and VPC flow-log delivery require
   the wildcards AWS mandates, scoped by the key/log-group resource.
 - **CKV2_AWS_5** — false positive: SGs are attached across module boundaries.
-- **CKV2_AWS_62** — event notifications are not applicable to state/log buckets.
+- **CKV2_AWS_38 / CKV2_AWS_39** — DNSSEC signing and DNS query logging on the created
+  public hosted zone are optional hardening, enabled per-domain when required.
 
 ## Planned follow-ups (tracked gaps)
 

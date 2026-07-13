@@ -13,6 +13,11 @@ output "alb_dns_name" {
   value       = module.alb.alb_dns_name
 }
 
+output "zone_name_servers" {
+  description = "Name servers of a newly-created hosted zone. Delegate the registered domain to these once, at the registrar. Empty when DNS is disabled or reusing a zone."
+  value       = var.enable_dns ? module.dns[0].name_servers : []
+}
+
 output "app_url" {
   description = "URL applications are reachable at."
   value = (

@@ -1,7 +1,11 @@
 ---
+# firewalld is in the Amazon Linux 2023 repos; fail2ban is not (needs EPEL), so
+# it is installed best-effort below and skipped cleanly if unavailable. With no
+# inbound SSH (SSM-only) fail2ban is defense-in-depth, not a hard requirement.
 security_packages:
-  - fail2ban
   - firewalld
+
+security_fail2ban_enabled: true
 
 # Ports opened in the host firewall. The app port is reachable only from the
 # ALB SG at the network layer; firewalld is defense-in-depth on the host.

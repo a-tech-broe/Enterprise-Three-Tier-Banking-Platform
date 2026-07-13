@@ -1,0 +1,59 @@
+#!/bin/bash
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Bootstrap for banking-platform app instances (${name_prefix}).
+#
+# Installs just enough for the instance to be reachable (SSM) and to pass the
+# ALB health check on first boot (nginx serving ${health_path}). Ansible then
+# converges the full configuration over SSM. Keeping this minimal-but-functional
+# means ASG scale-out and instance refresh always produce healthy instances,
+# even before/without an Ansible run.
+# ---------------------------------------------------------------------------
+
+dnf install -y amazon-ssm-agent nginx || yum install -y amazon-ssm-agent nginx || true
+systemctl enable --now amazon-ssm-agent || true
+
+mkdir -p /etc/nginx/conf.d
+cat > /etc/nginx/conf.d/banking-platform.conf <<'NGINX'
+upstream banking_app {
+    server 127.0.0.1:${upstream_port};
+    keepalive 16;
+}
+server {
+    listen ${app_port};
+    server_name _;
+    server_tokens off;
+
+    location = ${health_path} {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        proxy_pass http://banking_app;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_intercept_errors on;
+        error_page 502 503 504 = @maintenance;
+    }
+
+    location @maintenance {
+        add_header Content-Type text/plain always;
+        return 503 "banking-platform: application starting\n";
+    }
+}
+NGINX
+
+rm -f /etc/nginx/conf.d/default.conf
+if nginx -t; then
+  systemctl enable --now nginx
+else
+  echo "nginx config test failed" >&2
+fi
+
+echo "${name_prefix} bootstrapped at $(date -u +%Y-%m-%dT%H:%M:%SZ)" > /etc/banking-platform-release

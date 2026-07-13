@@ -40,21 +40,42 @@
     sysctl_file: /etc/sysctl.d/99-hardening.conf
   loop: "{{ security_sysctl | dict2items }}"
 
-# --- fail2ban --------------------------------------------------------------
-- name: Configure fail2ban jail
-  ansible.builtin.template:
-    src: jail.local.j2
-    dest: /etc/fail2ban/jail.local
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Restart fail2ban
-
-- name: Enable and start fail2ban
-  ansible.builtin.service:
+# --- fail2ban (best-effort: not in AL2023 default repos) -------------------
+- name: Attempt to install fail2ban
+  ansible.builtin.package:
     name: fail2ban
-    state: started
-    enabled: true
+    state: present
+  register: security_fail2ban_install
+  failed_when: false
+  when: security_fail2ban_enabled | bool
+
+- name: Report fail2ban availability
+  ansible.builtin.debug:
+    msg: "fail2ban not available in the configured repos; skipping (SSM-only host has no inbound SSH)."
+  when:
+    - security_fail2ban_enabled | bool
+    - security_fail2ban_install.failed | default(false) or (security_fail2ban_install.rc | default(0)) != 0
+
+- name: Configure and enable fail2ban
+  when:
+    - security_fail2ban_enabled | bool
+    - not (security_fail2ban_install.failed | default(false))
+    - (security_fail2ban_install.rc | default(0)) == 0
+  block:
+    - name: Configure fail2ban jail
+      ansible.builtin.template:
+        src: jail.local.j2
+        dest: /etc/fail2ban/jail.local
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart fail2ban
+
+    - name: Enable and start fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: started
+        enabled: true
 
 # --- Automatic security updates -------------------------------------------
 - name: Install dnf-automatic for unattended security patching

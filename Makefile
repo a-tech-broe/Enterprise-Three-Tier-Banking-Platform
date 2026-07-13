@@ -72,5 +72,7 @@ galaxy: ## Install Ansible collection dependencies
 	cd $(ANSIBLE_DIR) && ansible-galaxy collection install -r requirements.yml
 
 .PHONY: configure
-configure: ## Run the Ansible playbook against ENV
-	cd $(ANSIBLE_DIR) && ansible-playbook -i inventories/$(ENV)/aws_ec2.yml site.yml
+configure: ## Run the Ansible playbook against ENV (reads the SSM bucket from tf output)
+	@bucket=$$(terraform -chdir=$(TF_DIR) output -raw ansible_ssm_bucket) && \
+		cd $(ANSIBLE_DIR) && ansible-playbook -i inventories/$(ENV)/aws_ec2.yml site.yml \
+			-e "ansible_aws_ssm_bucket_name=$$bucket"

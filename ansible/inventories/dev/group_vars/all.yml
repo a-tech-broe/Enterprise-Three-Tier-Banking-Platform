@@ -1,9 +1,14 @@
 ---
 env_name: dev
 
-# Connect through SSM Session Manager (requires the community.aws SSM plugin and
-# the AWS CLI Session Manager plugin on the controller). No SSH keys or bastion.
+# Connect over AWS SSM Session Manager via the community.aws.aws_ssm plugin
+# (requires the AWS CLI Session Manager plugin on the controller). No SSH, no
+# bastion, no key pairs.
 ansible_connection: community.aws.aws_ssm
 ansible_aws_ssm_region: us-east-1
-ansible_aws_ssm_bucket_name: banking-platform-dev-ansible-ssm
 ansible_python_interpreter: /usr/bin/python3
+
+# The S3 transfer bucket is created by Terraform with an account suffix, so it is
+# supplied at run time (CI passes -e ansible_aws_ssm_bucket_name=...; the Makefile
+# reads it from 'terraform output'). Set it here only for ad-hoc local runs.
+# ansible_aws_ssm_bucket_name: banking-platform-dev-ansible-ssm-<ACCOUNT_ID>

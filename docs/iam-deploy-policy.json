@@ -30,7 +30,6 @@
         "cloudwatch:*",
         "logs:*",
         "route53:*",
-        "route53domains:*",
         "acm:*",
         "application-autoscaling:*"
       ],
