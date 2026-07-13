@@ -14,12 +14,6 @@ variable "create_hosted_zone" {
   default     = false
 }
 
-variable "update_registered_domain_ns" {
-  description = "When creating the zone, point the Route53-registered domain's name servers at it so ACM DNS validation resolves publicly. Requires the domain to be registered in Route53 Domains in this account (us-east-1 endpoint)."
-  type        = bool
-  default     = false
-}
-
 variable "create_certificate" {
   description = "Whether to request and validate an ACM certificate for record_name."
   type        = bool

@@ -257,10 +257,9 @@ module "dns" {
   source = "../dns"
   count  = var.enable_dns ? 1 : 0
 
-  zone_name                   = var.zone_name
-  record_name                 = var.record_name
-  create_hosted_zone          = var.create_hosted_zone
-  update_registered_domain_ns = var.update_registered_domain_ns
+  zone_name          = var.zone_name
+  record_name        = var.record_name
+  create_hosted_zone = var.create_hosted_zone
 
   tags = local.common_tags
 }
@@ -315,15 +314,15 @@ module "alb" {
 # Compute (launch template + ASG)
 # ---------------------------------------------------------------------------
 locals {
-  # Minimal, idempotent user-data. Ansible performs the full configuration; this
-  # only ensures the SSM agent is live so the pipeline can reach the instance.
-  user_data = <<-EOF
-    #!/bin/bash
-    set -euo pipefail
-    dnf install -y amazon-ssm-agent || yum install -y amazon-ssm-agent || true
-    systemctl enable --now amazon-ssm-agent || true
-    echo "${local.name_prefix} bootstrapped at $(date -u)" > /etc/banking-platform-release
-  EOF
+  # Functional bootstrap: installs the SSM agent (for Ansible) plus a minimal
+  # nginx that answers the ALB health check on first boot, so ASG scale-out and
+  # instance refresh always yield healthy instances. Ansible converges the rest.
+  user_data = templatefile("${path.module}/templates/user-data.sh.tftpl", {
+    name_prefix   = local.name_prefix
+    app_port      = var.app_port
+    upstream_port = var.app_upstream_port
+    health_path   = var.health_check_path
+  })
 }
 
 module "ec2" {

@@ -22,21 +22,12 @@ locals {
   name_servers = var.create_hosted_zone ? aws_route53_zone.this[0].name_servers : []
 }
 
-# ---------------------------------------------------------------------------
-# Delegate the registered domain to the new zone (optional).
-# Only valid when the domain is registered in Route53 Domains in this account.
-# ---------------------------------------------------------------------------
-resource "aws_route53domains_registered_domain" "this" {
-  count       = var.create_hosted_zone && var.update_registered_domain_ns ? 1 : 0
-  domain_name = var.zone_name
-
-  dynamic "name_server" {
-    for_each = local.name_servers
-    content {
-      name = name_server.value
-    }
-  }
-}
+# NOTE: When create_hosted_zone = true for a domain registered elsewhere (or in
+# Route53 Domains), delegate the registrar's name servers to this zone ONCE, out
+# of band, using the `name_servers` output. Registrar management is deliberately
+# not automated here — it is a one-time, account-level concern rather than part
+# of the per-environment app pipeline, and ACM DNS validation only completes
+# once that delegation has propagated.
 
 # ---------------------------------------------------------------------------
 # ACM certificate with DNS validation
@@ -74,10 +65,6 @@ resource "aws_acm_certificate_validation" "this" {
   count                   = var.create_certificate ? 1 : 0
   certificate_arn         = aws_acm_certificate.this[0].arn
   validation_record_fqdns = [for r in aws_route53_record.validation : r.fqdn]
-
-  # Ensure the registrar is delegated to this zone before we wait for ACM to
-  # validate over public DNS (otherwise validation cannot resolve the records).
-  depends_on = [aws_route53domains_registered_domain.this]
 
   timeouts {
     create = "60m"
