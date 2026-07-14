@@ -1,19 +1,17 @@
 {
-  "name": "skybroe-web",
+  "name": "banking-platform-web",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@types/leaflet": "^1.9.21",
-    "aws-rum-web": "^1.25.0",
-    "leaflet": "^1.9.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.24.0"
   },
   "devDependencies": {

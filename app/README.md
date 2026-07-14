@@ -1,14 +1,26 @@
-# Banking Platform API
+# Banking Platform Application
 
-The application tier of the platform: a FastAPI service exposing accounts,
-transactions, and transfers, backed by PostgreSQL (RDS). It runs as a container
-on the app-tier EC2 instances, behind nginx (which proxies `:8080` → `:8081`),
-behind the ALB.
+The application tier of the platform:
+
+- **`src/banking/` + `tests/`** — the **API**: a FastAPI service exposing
+  accounts, transactions, and transfers, backed by PostgreSQL (RDS). Runs as a
+  container on the app-tier EC2 instances, behind nginx, behind the ALB.
+- **`web/`** — the **UI**: a React + Vite single-page app (accounts, deposits/
+  withdrawals, transfers) that calls the API. Static-hostable (its own nginx
+  image, or S3/CloudFront).
 
 ## Architecture
 
 ```
+Browser ──► web SPA (static)  ──►  API
 ALB ──► nginx (:8080) ──► banking-api container (:8081) ──► RDS PostgreSQL
+```
+
+## Run the full stack locally
+
+```bash
+cd app
+docker compose up --build      # web :8080 · api :8081/docs · postgres :5432
 ```
 
 - **Money is integer cents** — never floats.
@@ -36,6 +48,7 @@ ALB ──► nginx (:8080) ──► banking-api container (:8081) ──► RD
 
 ## Develop & test
 
+API:
 ```bash
 cd app
 python -m venv .venv && . .venv/bin/activate
@@ -43,6 +56,13 @@ pip install -r requirements-dev.txt
 ruff check src tests
 pytest                      # uses in-memory SQLite, no AWS/Postgres needed
 uvicorn banking.main:app --port 8081 --reload
+```
+
+Web (in `app/web`):
+```bash
+npm install
+npm run dev                 # http://localhost:5173, proxies /api → :8081
+npm run typecheck && npm run build
 ```
 
 ## Container

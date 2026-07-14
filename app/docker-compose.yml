@@ -1,37 +1,35 @@
-version: '3.9'
-
+# Local full-stack banking platform: PostgreSQL + FastAPI API + React web.
+#   docker compose up --build
+#   web  -> http://localhost:8080     api -> http://localhost:8081/docs
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: skybroe
-      POSTGRES_USER: ${DB_USER:-skybroe}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-skybroe_dev}
+      POSTGRES_DB: banking
+      POSTGRES_USER: ${DB_USER:-bankadmin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-banking_dev}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-skybroe}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bankadmin}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  backend:
+  api:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      NODE_ENV: production
-      PORT: 3001
-      DB_URL: postgresql://${DB_USER:-skybroe}:${DB_PASSWORD:-skybroe_dev}@db:5432/skybroe
-      FAA_CLIENT_ID: ${FAA_CLIENT_ID:-}
-      FAA_CLIENT_SECRET: ${FAA_CLIENT_SECRET:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ENVIRONMENT: local
+      DATABASE_URL: postgresql+psycopg://${DB_USER:-bankadmin}:${DB_PASSWORD:-banking_dev}@db:5432/banking
+      CORS_ORIGINS: "*"
     ports:
-      - "3001:3001"
+      - "8081:8081"
     depends_on:
       db:
         condition: service_healthy
@@ -41,12 +39,12 @@ services:
       context: ./web
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8081}
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:8080"
     depends_on:
-      - backend
+      - api
 
 volumes:
   postgres_data:

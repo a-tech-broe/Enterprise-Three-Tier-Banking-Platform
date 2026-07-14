@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     db_name: str = Field(default="banking", alias="DB_NAME")
     aws_region: str = Field(default="us-east-1", alias="AWS_REGION")
 
+    # Comma-separated allowed origins for the web UI. Default "*" for the demo.
+    cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
+
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
     def resolve_database_url(self) -> str:
         if self.database_url:
             return self.database_url
