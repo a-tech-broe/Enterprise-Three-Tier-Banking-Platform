@@ -144,8 +144,12 @@ jobs:
             esac
             if echo "$statuses" | grep -qvE 'Success'; then
               echo "::error::One or more instances failed to roll the app."
-              aws ssm list-command-invocations --command-id "$CID" --details \
-                --query 'CommandInvocations[].CommandPlugins[].Output' --output text
+              out="$(aws ssm list-command-invocations --command-id "$CID" --details \
+                --query 'CommandInvocations[].CommandPlugins[].Output' --output text)"
+              echo "$out"
+              if echo "$out" | grep -qE 'banking-app.service not found|docker: command not found'; then
+                echo "::error::Instances lack the app runtime (docker + banking-app.service). Run the 'infra-deploy' workflow once so the ASG rolls instances onto the current user-data, then re-run app-deploy."
+              fi
               exit 1
             fi
             echo "All instances healthy on the new image."
