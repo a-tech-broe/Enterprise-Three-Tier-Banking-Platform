@@ -4,8 +4,10 @@
     WORKDIR /app
     
     COPY package*.json ./
-    RUN npm ci
-    
+    # npm install (not ci): npm/cli#4828 skips the platform-specific rollup/
+    # esbuild native binary under `npm ci`, breaking the vite build.
+    RUN npm install --no-audit --no-fund
+
     COPY . .
     
     ARG VITE_API_URL
