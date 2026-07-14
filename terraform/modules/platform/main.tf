@@ -276,9 +276,10 @@ module "dns" {
   source = "../dns"
   count  = var.enable_dns ? 1 : 0
 
-  zone_name          = var.zone_name
-  record_name        = var.record_name
-  create_hosted_zone = var.create_hosted_zone
+  zone_name                    = var.zone_name
+  record_name                  = var.record_name
+  create_hosted_zone           = var.create_hosted_zone
+  manage_registrar_nameservers = var.manage_registrar_nameservers
 
   tags = local.common_tags
 }

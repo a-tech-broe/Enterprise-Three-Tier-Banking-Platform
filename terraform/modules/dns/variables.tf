@@ -20,6 +20,12 @@ variable "create_certificate" {
   default     = true
 }
 
+variable "manage_registrar_nameservers" {
+  description = "When the domain is registered in this account's Route 53 Domains, point its registrar name servers at the created hosted zone automatically (so ACM DNS validation completes without a manual step). Only takes effect together with create_hosted_zone. Requires route53domains permissions."
+  type        = bool
+  default     = false
+}
+
 variable "subject_alternative_names" {
   description = "Additional SANs for the certificate."
   type        = list(string)

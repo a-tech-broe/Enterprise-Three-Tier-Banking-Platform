@@ -168,6 +168,12 @@ variable "create_hosted_zone" {
   default     = false
 }
 
+variable "manage_registrar_nameservers" {
+  description = "Auto-delegate the domain to the created hosted zone when it is registered in this account's Route 53 Domains (no manual registrar step). Only used when enable_dns and create_hosted_zone are true."
+  type        = bool
+  default     = false
+}
+
 variable "record_name" {
   description = "App FQDN to publish (required when enable_dns = true)."
   type        = string
