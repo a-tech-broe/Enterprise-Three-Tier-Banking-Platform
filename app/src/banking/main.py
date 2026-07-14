@@ -6,11 +6,14 @@ transaction, and transfer operations backed by PostgreSQL (RDS).
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import errors
 from .config import get_settings
@@ -19,6 +22,43 @@ from .routers import accounts, health, transfers
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("banking")
+
+# Directory holding the built React SPA (Vite `dist`). Baked into the container
+# image at /app/web by the Dockerfile; absent in local/test runs (API-only).
+WEB_DIST_DIR = Path(os.getenv("WEB_DIST_DIR", "/app/web"))
+
+
+def _mount_web_ui(app: FastAPI) -> bool:
+    """Serve the bundled single-page app at the root when it's present.
+
+    Vite's hashed assets are served from /assets; every other non-API path
+    falls back to index.html so client-side routing (deep links, refresh)
+    works. Returns False when no build is bundled so callers can keep the
+    API-only root handler. Registered LAST so real API routes match first.
+    """
+    index = WEB_DIST_DIR / "index.html"
+    if not index.is_file():
+        log.info("web UI not bundled (%s missing); serving API only", index)
+        return False
+
+    assets = WEB_DIST_DIR / "assets"
+    if assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets)), name="assets")
+
+    root = WEB_DIST_DIR.resolve()
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa(full_path: str) -> FileResponse:
+        # Unknown API/docs paths must 404 as usual, not fall back to HTML.
+        if full_path.startswith(("api/", "health", "docs", "redoc", "openapi.json")):
+            raise HTTPException(status_code=404)
+        target = (WEB_DIST_DIR / full_path).resolve()
+        if full_path and target.is_file() and root in target.parents:
+            return FileResponse(str(target))  # favicon, static assets, etc.
+        return FileResponse(str(index))       # SPA entrypoint / client routes
+
+    log.info("serving bundled web UI from %s", WEB_DIST_DIR)
+    return True
 
 
 @asynccontextmanager
@@ -63,18 +103,23 @@ def create_app() -> FastAPI:
             content={"error": exc.code, "message": exc.message},
         )
 
-    @app.get("/", tags=["root"])
-    def root() -> dict[str, str]:
-        return {
-            "service": settings.app_name,
-            "environment": settings.environment,
-            "docs": "/docs",
-            "health": "/health",
-        }
-
     app.include_router(health.router)
     app.include_router(accounts.router)
     app.include_router(transfers.router)
+
+    # When the web build is bundled, the SPA owns "/" and all non-API routes.
+    # Otherwise (local/test/API-only) keep a small JSON root for humans.
+    if not _mount_web_ui(app):
+
+        @app.get("/", tags=["root"])
+        def root() -> dict[str, str]:
+            return {
+                "service": settings.app_name,
+                "environment": settings.environment,
+                "docs": "/docs",
+                "health": "/health",
+            }
+
     return app
 
 

@@ -5,3 +5,5 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.md
+web/node_modules/
+web/dist/
