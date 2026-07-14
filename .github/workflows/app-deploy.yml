@@ -104,32 +104,28 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: gha-app-deploy
-      # Recompute the image ref here rather than receiving it from build-push:
-      # if DOCKERHUB_USERNAME is a *secret* it gets masked in cross-job outputs
-      # and would arrive empty. The value is a public image ref, used directly.
-      - name: Resolve image
-        id: meta
+      # IMAGE is computed and used within this single step. It must NOT flow
+      # through a step output / env expression: if DOCKERHUB_USERNAME is a secret,
+      # GitHub scrubs any output/expression containing it to an empty string.
+      # Built inline from the DH_USER env, its real value reaches the AWS CLI
+      # (only masked in logs). command_id (not secret) is fine to output.
+      - name: Publish image & roll the container (SSM)
+        id: run
         env:
           DH_USER: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
           DH_REPO: ${{ vars.DOCKERHUB_REPO || 'banking-platform-api' }}
-        run: echo "image=${DH_USER}/${DH_REPO}:${TARGET_ENV}-sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Publish image URI to SSM
-        env:
-          IMAGE: ${{ steps.meta.outputs.image }}
         run: |
-          if [ -z "$IMAGE" ]; then echo "::error::Empty image ref (set DOCKERHUB_USERNAME)"; exit 1; fi
+          if [ -z "$DH_USER" ]; then echo "::error::Set DOCKERHUB_USERNAME (var or secret)."; exit 1; fi
+          IMAGE="${DH_USER}/${DH_REPO}:${TARGET_ENV}-sha-$(git rev-parse --short HEAD)"
+          echo "Deploying image: $IMAGE"
+
           aws ssm put-parameter \
             --name "/${PROJECT}/${TARGET_ENV}/app_image" \
             --type String --overwrite --value "$IMAGE"
-          echo "Published $IMAGE"
-      - name: Roll the container on app instances (SSM)
-        id: run
-        env:
-          IMAGE: ${{ steps.meta.outputs.image }}
-        run: |
+
           CID=$(aws ssm send-command \
             --document-name AWS-RunShellScript \
-            --comment "Deploy banking-api $IMAGE" \
+            --comment "Deploy banking-api" \
             --targets "Key=tag:Environment,Values=${TARGET_ENV}" "Key=tag:Role,Values=app" \
             --parameters commands='["sudo systemctl restart banking-app","for i in $(seq 1 24); do curl -fsS http://localhost:8081/health >/dev/null 2>&1 && { echo APP_HEALTHY; exit 0; }; sleep 5; done; echo APP_NOT_HEALTHY; exit 1"]' \
             --query Command.CommandId --output text)
