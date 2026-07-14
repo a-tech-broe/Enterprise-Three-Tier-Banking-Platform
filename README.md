@@ -19,7 +19,7 @@ GitHub ─► GitHub Actions ─► [ fmt · validate · tflint · checkov · pl
                               approval · apply · ansible · smoke · teams ] ─► AWS
 
 VPC (3 AZ)
-├── Public Subnets        → ALB (HTTPS w/ ACM, or HTTP)  +  NAT Gateways
+├── Public Subnets        → ALB (HTTPS w/ ACM @ skybroe.com)  +  NAT Gateways
 ├── Private App Subnets   → EC2 ASG: nginx :8080 → banking-api container :8081
 │                                    (CloudWatch agent, SSM, pulls image from Docker Hub)
 └── Private DB Subnets    → Multi-AZ RDS PostgreSQL (KMS, Secrets Manager)
@@ -43,12 +43,16 @@ Group (rolling instance refresh, target-tracking) · Multi-AZ-capable RDS
 PostgreSQL · Secrets Manager · CloudWatch dashboards/alarms · SNS · S3 buckets for
 ALB access logs and the Ansible SSM transfer channel.
 
-**Optional TLS / DNS.** The `dns` module can create a public Route 53 hosted zone,
-delegate the registered domain to it, and request + DNS-validate an ACM
-certificate, which the ALB then serves on an HTTPS listener (with an 80→443
-redirect). When no certificate is configured, the ALB serves HTTP directly — so
-an environment without a domain still deploys cleanly. Toggle per environment
-with `enable_dns` / `create_hosted_zone` / `zone_name` / `record_name`.
+**TLS / DNS.** The `dns` module creates a public Route 53 hosted zone, requests +
+DNS-validates an ACM certificate, and the ALB serves it on an HTTPS listener
+(with an 80→443 redirect). **dev** is live at **https://skybroe.com**: because
+the domain is registered in this account's Route 53 Domains, Terraform also
+delegates it to the new zone automatically (`aws_route53domains_registered_domain`),
+so certificate validation completes in the same apply with no manual registrar
+step. Toggle per environment with `enable_dns` / `create_hosted_zone` /
+`manage_registrar_nameservers` / `zone_name` / `record_name`; when `enable_dns`
+is off the ALB serves HTTP directly, so an environment without a domain still
+deploys cleanly.
 
 ## What Ansible configures
 
@@ -112,8 +116,9 @@ scripts/        bootstrap-backend.sh · setup-oidc.sh
    (secret) for a **public** Docker Hub repo, then **Actions → app-deploy** —
    test → build (API + web UI) → Trivy scan → push to Docker Hub → roll the
    container on the instances. Run `infra-deploy` at least once before the first
-   `app-deploy` so the instances have the container runtime. Then open the
-   **ALB DNS name** in a browser: the web UI is at `/`, Swagger at `/docs`.
+   `app-deploy` so the instances have the container runtime. Then open
+   **https://skybroe.com** in a browser: the web UI is at `/`, Swagger at `/docs`
+   (before DNS is enabled, use the ALB DNS name over HTTP).
 
 Full setup, IAM policy details, and the operations runbook:
 [`docs/RUNBOOK.md`](docs/RUNBOOK.md) · [`docs/SECURITY.md`](docs/SECURITY.md).
@@ -167,12 +172,12 @@ app-deploy (dispatch/push) ─► test ─► build ─► Trivy scan ─► pus
 
 ## Environments
 
-| Env  | NAT     | RDS       | Deletion protection | Log retention |
-|------|---------|-----------|---------------------|---------------|
-| dev  | single  | single-AZ | off                 | 30d           |
-| qa   | single  | single-AZ | on                  | 60d           |
-| uat  | per-AZ  | Multi-AZ  | on                  | 90d           |
-| prod | per-AZ  | Multi-AZ  | on                  | 365d          |
+| Env  | NAT     | RDS       | Deletion protection | Log retention | URL                     |
+|------|---------|-----------|---------------------|---------------|-------------------------|
+| dev  | single  | single-AZ | off                 | 30d           | https://skybroe.com     |
+| qa   | single  | single-AZ | on                  | 60d           | ALB DNS (HTTP)          |
+| uat  | per-AZ  | Multi-AZ  | on                  | 90d           | ALB DNS (HTTP)          |
+| prod | per-AZ  | Multi-AZ  | on                  | 365d          | ALB DNS (HTTP)          |
 
 Each environment keeps isolated state (`<env>/terraform.tfstate`) and a
 non-overlapping VPC CIDR (`10.10/20/30/40.0.0/16`).
