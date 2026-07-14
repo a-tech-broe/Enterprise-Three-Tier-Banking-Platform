@@ -62,24 +62,6 @@
       "Resource": "arn:aws:ssm:*:<ACCOUNT_ID>:parameter/banking-platform/*"
     },
     {
-      "Sid": "EcrPushPull",
-      "Effect": "Allow",
-      "Action": [
-        "ecr:GetAuthorizationToken",
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:BatchGetImage",
-        "ecr:InitiateLayerUpload",
-        "ecr:UploadLayerPart",
-        "ecr:CompleteLayerUpload",
-        "ecr:PutImage",
-        "ecr:DescribeRepositories",
-        "ecr:DescribeImages",
-        "ecr:ListImages"
-      ],
-      "Resource": "*"
-    },
-    {
       "Sid": "S3ForAlbLogsBucket",
       "Effect": "Allow",
       "Action": "s3:*",

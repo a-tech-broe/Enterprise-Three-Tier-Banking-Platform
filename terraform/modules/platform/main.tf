@@ -96,21 +96,10 @@ module "rds" {
 }
 
 # ---------------------------------------------------------------------------
-# Application image registry (ECR) + the SSM parameter that tells instances
-# which image to run. The app-deploy pipeline pushes images and updates the
-# parameter; instances pull on boot and on deploy.
+# SSM parameter that tells instances which image to run. The app-deploy pipeline
+# pushes the image (to Docker Hub) and updates this value; instances pull on boot
+# and on deploy. Public Docker Hub images need no registry credentials.
 # ---------------------------------------------------------------------------
-module "ecr" {
-  source = "../ecr"
-
-  name                 = "${local.name_prefix}-api"
-  scan_on_push         = true
-  image_tag_mutability = "IMMUTABLE" # images are tagged by immutable git SHA
-  force_delete         = var.environment != "prod"
-
-  tags = local.common_tags
-}
-
 resource "aws_ssm_parameter" "app_image" {
   name        = "/${var.project}/${var.environment}/app_image"
   description = "Current banking-api image URI the app instances should run."
@@ -125,17 +114,16 @@ resource "aws_ssm_parameter" "app_image" {
 }
 
 # ---------------------------------------------------------------------------
-# IAM (instance role: SSM, CloudWatch, read DB secret, pull ECR image)
+# IAM (instance role: SSM, CloudWatch, read DB secret, read image parameter)
 # ---------------------------------------------------------------------------
 module "iam" {
   source = "../iam"
 
-  name                = local.name_prefix
-  secret_arns         = [module.rds.secret_arn]
-  kms_key_arns        = [module.kms.key_arn]
-  ssm_bucket_arns     = [aws_s3_bucket.ansible_ssm.arn]
-  ecr_repository_arns = [module.ecr.repository_arn]
-  ssm_parameter_arns  = [aws_ssm_parameter.app_image.arn]
+  name               = local.name_prefix
+  secret_arns        = [module.rds.secret_arn]
+  kms_key_arns       = [module.kms.key_arn]
+  ssm_bucket_arns    = [aws_s3_bucket.ansible_ssm.arn]
+  ssm_parameter_arns = [aws_ssm_parameter.app_image.arn]
 
   tags = local.common_tags
 }

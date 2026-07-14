@@ -8,7 +8,7 @@ set -euo pipefail
 #   * nginx      -> reverse proxy on :${app_port}; answers ${health_path} so the
 #                   instance passes the ALB health check from first boot.
 #   * docker     -> runs the banking-api container on :${upstream_port}.
-#   * banking-app.service -> reads the current image URI from SSM, pulls from ECR
+#   * banking-app.service -> reads the current image URI from SSM, pulls it
 #                   and (re)starts the container. Runs on boot, so ASG scale-out
 #                   and instance refresh self-deploy the app. The app-deploy
 #                   pipeline restarts this service to roll a new image.

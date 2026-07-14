@@ -90,32 +90,6 @@ data "aws_iam_policy_document" "app" {
     }
   }
 
-  # ECR: GetAuthorizationToken is account-level (Resource *); the pull actions
-  # are scoped to the specific repositories.
-  dynamic "statement" {
-    for_each = length(var.ecr_repository_arns) > 0 ? [1] : []
-    content {
-      sid       = "EcrAuth"
-      effect    = "Allow"
-      actions   = ["ecr:GetAuthorizationToken"]
-      resources = ["*"]
-    }
-  }
-
-  dynamic "statement" {
-    for_each = length(var.ecr_repository_arns) > 0 ? [1] : []
-    content {
-      sid    = "EcrPull"
-      effect = "Allow"
-      actions = [
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:BatchGetImage",
-      ]
-      resources = var.ecr_repository_arns
-    }
-  }
-
   dynamic "statement" {
     for_each = length(var.ssm_parameter_arns) > 0 ? [1] : []
     content {
@@ -128,7 +102,7 @@ data "aws_iam_policy_document" "app" {
 }
 
 resource "aws_iam_role_policy" "app" {
-  count  = length(var.secret_arns) + length(var.kms_key_arns) + length(var.artifact_bucket_arns) + length(var.ssm_bucket_arns) + length(var.ecr_repository_arns) + length(var.ssm_parameter_arns) > 0 ? 1 : 0
+  count  = length(var.secret_arns) + length(var.kms_key_arns) + length(var.artifact_bucket_arns) + length(var.ssm_bucket_arns) + length(var.ssm_parameter_arns) > 0 ? 1 : 0
   name   = "${var.name}-app"
   role   = aws_iam_role.instance.id
   policy = data.aws_iam_policy_document.app.json

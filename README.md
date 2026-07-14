@@ -72,7 +72,7 @@ app/                    Banking API (FastAPI): accounts, transactions, transfers
 terraform/
   bootstrap/            S3 + DynamoDB + KMS remote-state backend (run once)
   modules/
-    vpc/ security-groups/ kms/ iam/ alb/ ec2/ rds/ cloudwatch/ dns/ ecr/
+    vpc/ security-groups/ kms/ iam/ alb/ ec2/ rds/ cloudwatch/ dns/
     platform/           composition module wiring everything together
   environments/
     dev/ qa/ uat/ prod/ thin per-env roots (backend + config-in-code)

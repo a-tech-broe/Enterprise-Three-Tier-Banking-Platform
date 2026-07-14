@@ -67,11 +67,6 @@ output "ansible_ssm_bucket" {
   value       = aws_s3_bucket.ansible_ssm.id
 }
 
-output "ecr_repository_url" {
-  description = "ECR repository URL the app image is pushed to."
-  value       = module.ecr.repository_url
-}
-
 output "app_image_parameter" {
   description = "SSM parameter name holding the current app image URI."
   value       = aws_ssm_parameter.app_image.name
