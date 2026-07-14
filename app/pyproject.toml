@@ -1,0 +1,18 @@
+[project]
+name = "banking-platform-api"
+version = "1.0.0"
+description = "Accounts, transactions, and transfers API for the three-tier banking platform."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["B008"]  # FastAPI uses function calls (Depends/Query) in argument defaults

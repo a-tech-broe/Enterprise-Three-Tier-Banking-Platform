@@ -1,4 +1,4 @@
-name: deploy
+name: infra-deploy
 
 # End-to-end delivery for one environment:
 #   plan -> manual approval (GitHub Environment) -> apply -> Ansible -> smoke -> Teams

@@ -96,15 +96,46 @@ module "rds" {
 }
 
 # ---------------------------------------------------------------------------
-# IAM (instance role: SSM, CloudWatch, read DB secret)
+# Application image registry (ECR) + the SSM parameter that tells instances
+# which image to run. The app-deploy pipeline pushes images and updates the
+# parameter; instances pull on boot and on deploy.
+# ---------------------------------------------------------------------------
+module "ecr" {
+  source = "../ecr"
+
+  name                 = "${local.name_prefix}-api"
+  scan_on_push         = true
+  image_tag_mutability = "IMMUTABLE" # images are tagged by immutable git SHA
+  force_delete         = var.environment != "prod"
+
+  tags = local.common_tags
+}
+
+resource "aws_ssm_parameter" "app_image" {
+  name        = "/${var.project}/${var.environment}/app_image"
+  description = "Current banking-api image URI the app instances should run."
+  type        = "String"
+  value       = "none" # updated by the app-deploy pipeline
+
+  lifecycle {
+    ignore_changes = [value] # owned by the app-deploy pipeline, not Terraform
+  }
+
+  tags = local.common_tags
+}
+
+# ---------------------------------------------------------------------------
+# IAM (instance role: SSM, CloudWatch, read DB secret, pull ECR image)
 # ---------------------------------------------------------------------------
 module "iam" {
   source = "../iam"
 
-  name            = local.name_prefix
-  secret_arns     = [module.rds.secret_arn]
-  kms_key_arns    = [module.kms.key_arn]
-  ssm_bucket_arns = [aws_s3_bucket.ansible_ssm.arn]
+  name                = local.name_prefix
+  secret_arns         = [module.rds.secret_arn]
+  kms_key_arns        = [module.kms.key_arn]
+  ssm_bucket_arns     = [aws_s3_bucket.ansible_ssm.arn]
+  ecr_repository_arns = [module.ecr.repository_arn]
+  ssm_parameter_arns  = [aws_ssm_parameter.app_image.arn]
 
   tags = local.common_tags
 }
@@ -318,10 +349,15 @@ locals {
   # nginx that answers the ALB health check on first boot, so ASG scale-out and
   # instance refresh always yield healthy instances. Ansible converges the rest.
   user_data = templatefile("${path.module}/templates/user-data.sh.tftpl", {
-    name_prefix   = local.name_prefix
-    app_port      = var.app_port
-    upstream_port = var.app_upstream_port
-    health_path   = var.health_check_path
+    name_prefix     = local.name_prefix
+    environment     = var.environment
+    aws_region      = var.aws_region
+    app_port        = var.app_port
+    upstream_port   = var.app_upstream_port
+    health_path     = var.health_check_path
+    app_image_param = aws_ssm_parameter.app_image.name
+    db_secret_arn   = module.rds.secret_arn
+    db_name         = var.db_name
   })
 }
 

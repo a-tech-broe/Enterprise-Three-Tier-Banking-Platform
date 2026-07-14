@@ -61,6 +61,25 @@ Terraform creates the required S3 transfer bucket (`banking-platform-<env>-ansib
 and grants the instance role access; CI and the Makefile pass its name to Ansible
 automatically — no manual setup.
 
+## Deploying the application
+
+Infra and app deploy through **separate** pipelines. After the infra exists:
+
+**Actions → app-deploy → Run workflow → choose env.** It runs `ruff` + `pytest`,
+builds the image, scans it with Trivy (fails on HIGH/CRITICAL), pushes to the
+env's ECR repo tagged by git SHA, publishes the image URI to SSM
+(`/banking-platform/<env>/app_image`), and rolls the container on the app
+instances via SSM (each runs `systemctl restart banking-app`, which re-pulls and
+restarts). New/scaled ASG instances self-deploy the same image on boot from
+user-data, so the fleet stays consistent.
+
+Locally, from `app/`: `ruff check src tests && pytest`, then
+`docker build -t banking-platform-api .`.
+
+Roll back by re-running `app-deploy` for the previous commit (its SHA-tagged image
+is still in ECR), or `aws ssm put-parameter --name /banking-platform/<env>/app_image`
+with the prior image URI and restart the service.
+
 ## Enabling HTTPS on a domain
 
 Environments default to **HTTP** (the ALB serves the app at its AWS DNS name), so

@@ -4,16 +4,23 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Bootstrap for banking-platform app instances (${name_prefix}).
 #
-# Installs just enough for the instance to be reachable (SSM) and to pass the
-# ALB health check on first boot (nginx serving ${health_path}). Ansible then
-# converges the full configuration over SSM. Keeping this minimal-but-functional
-# means ASG scale-out and instance refresh always produce healthy instances,
-# even before/without an Ansible run.
+#   * SSM agent  -> Ansible/operators can reach the host (no SSH).
+#   * nginx      -> reverse proxy on :${app_port}; answers ${health_path} so the
+#                   instance passes the ALB health check from first boot.
+#   * docker     -> runs the banking-api container on :${upstream_port}.
+#   * banking-app.service -> reads the current image URI from SSM, pulls from ECR
+#                   and (re)starts the container. Runs on boot, so ASG scale-out
+#                   and instance refresh self-deploy the app. The app-deploy
+#                   pipeline restarts this service to roll a new image.
 # ---------------------------------------------------------------------------
 
-dnf install -y amazon-ssm-agent nginx || yum install -y amazon-ssm-agent nginx || true
+# Amazon Linux 2023 ships the AWS CLI v2; only install what may be missing.
+dnf install -y amazon-ssm-agent nginx docker || \
+  yum install -y amazon-ssm-agent nginx docker || true
 systemctl enable --now amazon-ssm-agent || true
+systemctl enable --now docker || true
 
+# --- nginx (health + reverse proxy to the app) -----------------------------
 mkdir -p /etc/nginx/conf.d
 cat > /etc/nginx/conf.d/banking-platform.conf <<'NGINX'
 upstream banking_app {
@@ -48,12 +55,55 @@ server {
     }
 }
 NGINX
-
 rm -f /etc/nginx/conf.d/default.conf
-if nginx -t; then
-  systemctl enable --now nginx
-else
-  echo "nginx config test failed" >&2
+if nginx -t; then systemctl enable --now nginx; fi
+
+# --- app runner: pull the current image from ECR and (re)start it ----------
+install -d -m 0755 /opt/banking-platform
+cat > /opt/banking-platform/run-app.sh <<'RUNAPP'
+#!/bin/bash
+set -euo pipefail
+REGION="${aws_region}"
+PARAM="${app_image_param}"
+
+IMAGE="$(aws ssm get-parameter --name "$PARAM" --region "$REGION" --query 'Parameter.Value' --output text 2>/dev/null || echo none)"
+if [ -z "$IMAGE" ] || [ "$IMAGE" = "none" ]; then
+  echo "No app image published yet (SSM $PARAM = none); leaving nginx maintenance page."
+  exit 0
 fi
+
+REGISTRY="$${IMAGE%%/*}"
+aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+docker pull "$IMAGE"
+docker rm -f banking-app 2>/dev/null || true
+docker run -d --name banking-app --restart unless-stopped \
+  -p 127.0.0.1:${upstream_port}:${upstream_port} \
+  -e ENVIRONMENT="${environment}" \
+  -e AWS_REGION="$REGION" \
+  -e DB_SECRET_ARN="${db_secret_arn}" \
+  -e DB_NAME="${db_name}" \
+  "$IMAGE"
+RUNAPP
+chmod +x /opt/banking-platform/run-app.sh
+
+cat > /etc/systemd/system/banking-app.service <<'UNIT'
+[Unit]
+Description=Banking Platform API container
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/banking-platform/run-app.sh
+ExecStop=/usr/bin/docker rm -f banking-app
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now banking-app.service || true
 
 echo "${name_prefix} bootstrapped at $(date -u +%Y-%m-%dT%H:%M:%SZ)" > /etc/banking-platform-release

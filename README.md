@@ -20,9 +20,14 @@ GitHub ─► GitHub Actions ─► [ fmt · validate · tflint · checkov · pl
 
 VPC (3 AZ)
 ├── Public Subnets        → ALB (HTTPS w/ ACM, or HTTP)  +  NAT Gateways
-├── Private App Subnets   → EC2 Auto Scaling Group (nginx, CloudWatch agent, SSM)
+├── Private App Subnets   → EC2 ASG: nginx :8080 → banking-api container :8081
+│                                    (CloudWatch agent, SSM, pulls image from ECR)
 └── Private DB Subnets    → Multi-AZ RDS PostgreSQL (KMS, Secrets Manager)
 ```
+
+The application tier is a FastAPI banking service ([`app/`](app/)) — accounts,
+transactions, and transfers with ledger integrity — that reads its DB credentials
+from Secrets Manager and runs as a container behind nginx.
 
 Full diagrams and design rationale: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -60,10 +65,14 @@ by `Environment` + `Role` tags.
 ## Repository layout
 
 ```
+app/                    Banking API (FastAPI): accounts, transactions, transfers
+  src/banking/          config · database · models · services · routers
+  tests/                pytest suite (in-memory SQLite, no AWS needed)
+  Dockerfile  requirements*.txt  pyproject.toml
 terraform/
   bootstrap/            S3 + DynamoDB + KMS remote-state backend (run once)
   modules/
-    vpc/ security-groups/ kms/ iam/ alb/ ec2/ rds/ cloudwatch/ dns/
+    vpc/ security-groups/ kms/ iam/ alb/ ec2/ rds/ cloudwatch/ dns/ ecr/
     platform/           composition module wiring everything together
   environments/
     dev/ qa/ uat/ prod/ thin per-env roots (backend + config-in-code)
@@ -72,7 +81,8 @@ ansible/
   roles/{common,docker,java,nginx,monitoring,security}/
   site.yml  ansible.cfg  requirements.yml
 .github/workflows/
-  bootstrap.yml  validate.yml  plan.yml  deploy.yml  destroy.yml
+  # infra:  bootstrap · validate · infra-plan · infra-deploy · infra-destroy
+  # app:    app-ci · app-deploy
 docs/
   ARCHITECTURE · RUNBOOK · SECURITY
   oidc-trust-policy.json · iam-deploy-policy.json · parah-access-policy.json
@@ -110,20 +120,41 @@ make configure ENV=dev                        # Ansible over SSM
 make check                                    # fmt · validate · tflint · scan · ansible-lint
 ```
 
-## Pipeline
+## Pipelines — two separate flows
 
+The **infra** flow provisions/configures the platform; the **app** flow ships the
+application onto it. They share nothing but the OIDC role and never run each other.
+
+**Infrastructure** (`terraform/**`, `ansible/**`):
 ```
-Pull Request ─► fmt ─► validate ─► tflint ─► checkov ─► ansible-lint  (plan comment on PR)
+PR ─► validate (fmt · tflint · checkov · terraform validate · ansible-lint) + infra-plan comment
 
-deploy (dispatch/push) ─► plan ─► manual approval ─► apply ─► Ansible ─► smoke ─► Teams
+infra-deploy (dispatch/push) ─► plan ─► approval ─► apply ─► Ansible ─► smoke ─► Teams
 ```
 
-- **OIDC only** — no long-lived cloud credentials in the repo or CI (the admin
-  keys are used once by `bootstrap`, then removed).
-- **Approval gate** — the `apply` job binds to a GitHub Environment; add required
-  reviewers on `uat`/`prod` to gate production applies.
-- **Guarded destroy** — `destroy.yml` requires typing the environment name plus
-  environment approval.
+**Application** (`app/**`):
+```
+PR ─► app-ci (ruff · pytest · docker build · Trivy scan)
+
+app-deploy (dispatch/push) ─► test ─► build ─► Trivy scan ─► push ECR
+                            ─► publish image URI to SSM ─► roll container on instances ─► verify
+```
+
+| Workflow | Deploys | Trigger |
+|----------|---------|---------|
+| `bootstrap` | OIDC provider + role trust/permissions | one-time |
+| `validate` / `infra-plan` | — (checks only) | PR / dispatch |
+| **`infra-deploy`** | **infrastructure** (Terraform + base config) | dispatch / push to `terraform`,`ansible` |
+| `infra-destroy` | tears down an environment | dispatch (guarded) |
+| `app-ci` | — (build/test/scan only) | PR / push to `app/` |
+| **`app-deploy`** | **the application** (image → instances) | dispatch / push to `app/` |
+
+- **OIDC only** — no long-lived cloud credentials in the repo or CI (admin keys
+  are used once by `bootstrap`, then removed).
+- **Approval gates** — `apply` (infra) and `deploy` (app) bind to a GitHub
+  Environment; add reviewers on `uat`/`prod` to gate production.
+- **App delivery is immutable** — images are tagged by git SHA, pushed to a
+  scan-on-push ECR repo; instances pull the pinned image on boot and on deploy.
 
 ## Environments
 

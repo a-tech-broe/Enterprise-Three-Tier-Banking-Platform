@@ -71,6 +71,11 @@ skip-check:
   - CKV2_AWS_38  # DNSSEC signing on public hosted zone
   - CKV2_AWS_39  # DNS query logging
 
+  # --- App image parameter ----------------------------------------------------
+  # The app_image SSM parameter holds a non-sensitive container image URI, so a
+  # plaintext String (not an encrypted SecureString) is appropriate.
+  - CKV2_AWS_34  # SSM parameter should be encrypted
+
 soft-fail: false
 compact: true
 quiet: true
