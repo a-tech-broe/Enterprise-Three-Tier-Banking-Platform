@@ -88,15 +88,14 @@ jobs:
       - name: Build image
         if: steps.exists.outputs.exists == 'false'
         run: docker build -t "${{ steps.meta.outputs.image }}" app
+      - name: Install Trivy
+        if: steps.exists.outputs.exists == 'false'
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
       - name: Trivy scan (fail on HIGH/CRITICAL)
         if: steps.exists.outputs.exists == 'false'
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ steps.meta.outputs.image }}
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: HIGH,CRITICAL
+        run: |
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed \
+            --scanners vuln --format table "${{ steps.meta.outputs.image }}"
       - name: Push to ECR
         if: steps.exists.outputs.exists == 'false'
         run: |
