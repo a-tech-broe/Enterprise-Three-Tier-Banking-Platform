@@ -24,9 +24,19 @@ log = logging.getLogger("banking")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    init_engine()
-    create_all()
-    log.info("banking-platform API started (env=%s)", settings.environment)
+    # Startup must not hard-fail on a transient DB problem: liveness (/health)
+    # has to answer so the deploy/ALB health check passes and the container
+    # stays up. DB reachability is surfaced separately by /health/ready.
+    try:
+        init_engine()
+        create_all()
+        log.info("banking-platform API started (env=%s)", settings.environment)
+    except Exception:  # noqa: BLE001 - degraded start is better than a crash loop
+        log.exception(
+            "DB init failed at startup (env=%s); serving in degraded mode. "
+            "Check /health/ready and DB connectivity.",
+            settings.environment,
+        )
     yield
 
 

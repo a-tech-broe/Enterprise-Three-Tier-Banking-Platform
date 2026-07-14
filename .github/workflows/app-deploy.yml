@@ -127,7 +127,7 @@ jobs:
             --document-name AWS-RunShellScript \
             --comment "Deploy banking-api" \
             --targets "Key=tag:Environment,Values=${TARGET_ENV}" "Key=tag:Role,Values=app" \
-            --parameters commands='["sudo systemctl restart banking-app","for i in $(seq 1 24); do curl -fsS http://localhost:8081/health >/dev/null 2>&1 && { echo APP_HEALTHY; exit 0; }; sleep 5; done; echo APP_NOT_HEALTHY; exit 1"]' \
+            --parameters commands='["sudo systemctl restart banking-app || true","for i in $(seq 1 24); do curl -fsS http://localhost:8081/health >/dev/null 2>&1 && { echo APP_HEALTHY; exit 0; }; sleep 5; done","echo APP_NOT_HEALTHY","echo ===IMAGE===; aws ssm get-parameter --name /banking-platform/'"${TARGET_ENV}"'/app_image --region '"${AWS_REGION:-us-east-1}"' --query Parameter.Value --output text 2>&1","echo ===SYSTEMD===; systemctl status banking-app --no-pager -l 2>&1 | tail -20","echo ===JOURNAL===; journalctl -u banking-app --no-pager -n 40 2>&1 | tail -40","echo ===DOCKER-PS===; docker ps -a 2>&1","echo ===DOCKER-LOGS===; docker logs --tail 60 banking-app 2>&1 || echo NO-CONTAINER","exit 1"]' \
             --query Command.CommandId --output text)
           echo "command_id=$CID" >> "$GITHUB_OUTPUT"
           echo "Sent SSM command $CID"
