@@ -54,9 +54,6 @@ jobs:
     name: build, scan & push (Docker Hub)
     needs: test
     runs-on: ubuntu-latest
-    outputs:
-      image: ${{ steps.meta.outputs.image }}
-      target: ${{ steps.meta.outputs.target }}
     steps:
       - uses: actions/checkout@v4
       - name: Preflight - Docker Hub credentials
@@ -98,28 +95,41 @@ jobs:
     name: deploy to instances
     needs: build-push
     runs-on: ubuntu-latest
-    environment: ${{ needs.build-push.outputs.target }}   # approval gate for uat/prod
+    environment: ${{ github.event.inputs.environment || 'dev' }}   # approval gate for uat/prod
     steps:
+      - uses: actions/checkout@v4
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: gha-app-deploy
+      # Recompute the image ref here rather than receiving it from build-push:
+      # if DOCKERHUB_USERNAME is a *secret* it gets masked in cross-job outputs
+      # and would arrive empty. The value is a public image ref, used directly.
+      - name: Resolve image
+        id: meta
+        env:
+          DH_USER: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+          DH_REPO: ${{ vars.DOCKERHUB_REPO || 'banking-platform-api' }}
+        run: echo "image=${DH_USER}/${DH_REPO}:${TARGET_ENV}-sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
       - name: Publish image URI to SSM
         env:
-          IMAGE: ${{ needs.build-push.outputs.image }}
+          IMAGE: ${{ steps.meta.outputs.image }}
         run: |
+          if [ -z "$IMAGE" ]; then echo "::error::Empty image ref (set DOCKERHUB_USERNAME)"; exit 1; fi
           aws ssm put-parameter \
             --name "/${PROJECT}/${TARGET_ENV}/app_image" \
             --type String --overwrite --value "$IMAGE"
           echo "Published $IMAGE"
       - name: Roll the container on app instances (SSM)
         id: run
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
         run: |
           CID=$(aws ssm send-command \
             --document-name AWS-RunShellScript \
-            --comment "Deploy banking-api ${{ needs.build-push.outputs.image }}" \
+            --comment "Deploy banking-api $IMAGE" \
             --targets "Key=tag:Environment,Values=${TARGET_ENV}" "Key=tag:Role,Values=app" \
             --parameters commands='["sudo systemctl restart banking-app","for i in $(seq 1 24); do curl -fsS http://localhost:8081/health >/dev/null 2>&1 && { echo APP_HEALTHY; exit 0; }; sleep 5; done; echo APP_NOT_HEALTHY; exit 1"]' \
             --query Command.CommandId --output text)
