@@ -27,7 +27,9 @@ VPC (3 AZ)
 
 The application ([`app/`](app/)) is a FastAPI banking service — accounts,
 transactions, and transfers with ledger integrity, DB credentials from Secrets
-Manager — running as a container behind nginx, plus a React web UI that calls it.
+Manager — running as a container behind nginx. The React web UI is built and
+**bundled into the same image**, served by FastAPI at the ALB root (`/`), with
+the API under `/api/v1/*` — so the whole thing is one URL, one deployable image.
 
 Full diagrams and design rationale: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -108,9 +110,10 @@ scripts/        bootstrap-backend.sh · setup-oidc.sh
    and the app runtime (Docker + a self-deploying `banking-app` service).
 4. **Ship the app** — add `DOCKERHUB_USERNAME` (variable) and `DOCKERHUB_TOKEN`
    (secret) for a **public** Docker Hub repo, then **Actions → app-deploy** —
-   test → build → Trivy scan → push to Docker Hub → roll the container on the
-   instances. Run `infra-deploy` at least once before the first `app-deploy` so
-   the instances have the container runtime.
+   test → build (API + web UI) → Trivy scan → push to Docker Hub → roll the
+   container on the instances. Run `infra-deploy` at least once before the first
+   `app-deploy` so the instances have the container runtime. Then open the
+   **ALB DNS name** in a browser: the web UI is at `/`, Swagger at `/docs`.
 
 Full setup, IAM policy details, and the operations runbook:
 [`docs/RUNBOOK.md`](docs/RUNBOOK.md) · [`docs/SECURITY.md`](docs/SECURITY.md).

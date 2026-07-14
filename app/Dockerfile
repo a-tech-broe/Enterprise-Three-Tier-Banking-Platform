@@ -1,4 +1,16 @@
 # syntax=docker/dockerfile:1
+# ---------- web builder (React SPA) ----------
+# Builds the Vite app to static files that FastAPI serves at the root, so the
+# whole banking UI + API ship as one image behind a single URL.
+FROM node:20-alpine AS web
+WORKDIR /web
+COPY web/package.json ./
+# package-lock is intentionally not committed (npm optional-dep bug), so install
+# rather than ci. node_modules/dist are excluded via .dockerignore.
+RUN npm install --no-audit --no-fund
+COPY web/ ./
+RUN npm run build
+
 # ---------- builder ----------
 FROM python:3.12-slim AS builder
 
@@ -27,7 +39,10 @@ RUN groupadd --system app && useradd --system --gid app --home /app app \
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 COPY src/ ./src/
-ENV PYTHONPATH=/app/src
+# Bundled React SPA (served by FastAPI at "/"; see main._mount_web_ui).
+COPY --from=web /web/dist /app/web
+ENV PYTHONPATH=/app/src \
+    WEB_DIST_DIR=/app/web
 
 USER app
 EXPOSE 8081
