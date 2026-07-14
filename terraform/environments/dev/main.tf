@@ -41,12 +41,17 @@ module "platform" {
   db_deletion_protection = false
   db_skip_final_snapshot = true
 
-  # TLS / DNS: HTTP-only for now. Delegating skybroe.com to a Route53 hosted zone
-  # needs route53domains permissions the CI identity doesn't have, so the app is
-  # served over HTTP at the ALB DNS name. To enable HTTPS later: delegate the
-  # registered domain to a hosted zone, then set enable_dns=true (plus
-  # create_hosted_zone / zone_name / record_name). The module already supports it.
-  enable_dns = false
+  # TLS / DNS: serve the app at https://skybroe.com. Terraform creates the hosted
+  # zone, requests + DNS-validates an ACM cert, adds the HTTPS listener (with an
+  # 80->443 redirect) and the apex alias to the ALB. Because skybroe.com is
+  # registered in this account's Route 53 Domains, manage_registrar_nameservers
+  # delegates the domain to the new zone automatically, so cert validation
+  # completes in the same apply with no manual registrar step.
+  enable_dns                   = true
+  create_hosted_zone           = true
+  manage_registrar_nameservers = true
+  zone_name                    = "skybroe.com"
+  record_name                  = "skybroe.com"
 
   # Observability
   alarm_email_endpoints = var.alarm_email_endpoints

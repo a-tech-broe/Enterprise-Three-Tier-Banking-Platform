@@ -62,6 +62,21 @@
       "Resource": "arn:aws:ssm:*:<ACCOUNT_ID>:parameter/banking-platform/*"
     },
     {
+      "Sid": "Route53DomainsDelegation",
+      "Effect": "Allow",
+      "Action": [
+        "route53domains:GetDomainDetail",
+        "route53domains:UpdateDomainNameservers",
+        "route53domains:EnableDomainAutoRenew",
+        "route53domains:DisableDomainAutoRenew",
+        "route53domains:EnableDomainTransferLock",
+        "route53domains:DisableDomainTransferLock",
+        "route53domains:UpdateDomainContactPrivacy",
+        "route53domains:ListDomains"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "S3ForAlbLogsBucket",
       "Effect": "Allow",
       "Action": "s3:*",

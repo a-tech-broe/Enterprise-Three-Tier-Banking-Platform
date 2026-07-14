@@ -22,12 +22,29 @@ locals {
   name_servers = var.create_hosted_zone ? aws_route53_zone.this[0].name_servers : []
 }
 
-# NOTE: When create_hosted_zone = true for a domain registered elsewhere (or in
-# Route53 Domains), delegate the registrar's name servers to this zone ONCE, out
-# of band, using the `name_servers` output. Registrar management is deliberately
-# not automated here — it is a one-time, account-level concern rather than part
-# of the per-environment app pipeline, and ACM DNS validation only completes
-# once that delegation has propagated.
+# Registrar delegation.
+#
+# When the domain is registered in THIS account's Route 53 Domains, we point its
+# registrar name servers at the freshly created hosted zone so ACM DNS
+# validation below completes in the same apply — no manual step. The route53
+# domains API lives only in us-east-1; this stack runs there, so the default
+# provider is fine. On destroy this resource stops managing the domain but does
+# not unregister it. For a domain registered elsewhere, leave this disabled and
+# copy the `name_servers` output into the external registrar once.
+resource "aws_route53domains_registered_domain" "this" {
+  count       = var.create_hosted_zone && var.manage_registrar_nameservers ? 1 : 0
+  domain_name = var.zone_name
+
+  dynamic "name_server" {
+    for_each = aws_route53_zone.this[0].name_servers
+    content {
+      name = name_server.value
+    }
+  }
+
+  auto_renew    = true
+  transfer_lock = true
+}
 
 # ---------------------------------------------------------------------------
 # ACM certificate with DNS validation
@@ -65,6 +82,11 @@ resource "aws_acm_certificate_validation" "this" {
   count                   = var.create_certificate ? 1 : 0
   certificate_arn         = aws_acm_certificate.this[0].arn
   validation_record_fqdns = [for r in aws_route53_record.validation : r.fqdn]
+
+  # Ensure the registrar points at this zone before we wait for validation,
+  # otherwise ACM can never resolve the validation records and this would block
+  # until the timeout.
+  depends_on = [aws_route53domains_registered_domain.this]
 
   timeouts {
     create = "60m"
