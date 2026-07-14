@@ -73,3 +73,6 @@ node_modules/
 dist/
 .expo/
 build/
+
+# platform-specific lockfile causes npm optional-deps bug in CI
+app/web/package-lock.json
