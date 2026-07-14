@@ -8,7 +8,7 @@ set -euo pipefail
 #   * nginx      -> reverse proxy on :${app_port}; answers ${health_path} so the
 #                   instance passes the ALB health check from first boot.
 #   * docker     -> runs the banking-api container on :${upstream_port}.
-#   * banking-app.service -> reads the current image URI from SSM, pulls from ECR
+#   * banking-app.service -> reads the current image URI from SSM, pulls it
 #                   and (re)starts the container. Runs on boot, so ASG scale-out
 #                   and instance refresh self-deploy the app. The app-deploy
 #                   pipeline restarts this service to roll a new image.
@@ -58,7 +58,7 @@ NGINX
 rm -f /etc/nginx/conf.d/default.conf
 if nginx -t; then systemctl enable --now nginx; fi
 
-# --- app runner: pull the current image from ECR and (re)start it ----------
+# --- app runner: pull the current image and (re)start it -------------------
 install -d -m 0755 /opt/banking-platform
 cat > /opt/banking-platform/run-app.sh <<'RUNAPP'
 #!/bin/bash
@@ -72,8 +72,11 @@ if [ -z "$IMAGE" ] || [ "$IMAGE" = "none" ]; then
   exit 0
 fi
 
+# Registry-aware login: ECR needs a token; a public Docker Hub image needs none.
 REGISTRY="$${IMAGE%%/*}"
-aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+if [[ "$REGISTRY" == *.dkr.ecr.*.amazonaws.com ]]; then
+  aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+fi
 docker pull "$IMAGE"
 docker rm -f banking-app 2>/dev/null || true
 docker run -d --name banking-app --restart unless-stopped \

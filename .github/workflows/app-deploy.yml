@@ -1,9 +1,12 @@
 name: app-deploy
 
-# APPLICATION delivery: build -> test -> scan -> push to ECR -> publish the image
-# URI to SSM -> roll the container on the running instances (they re-pull and
+# APPLICATION delivery: build -> test -> scan -> push to Docker Hub -> publish the
+# image ref to SSM -> roll the container on the running instances (they re-pull and
 # restart). This deploys ONLY the app; it never touches Terraform/infrastructure.
-# Infra changes go through the separate `deploy` (infra) workflow.
+# Infra changes go through the separate `infra-deploy` workflow.
+#
+# Requires repo config: DOCKERHUB_USERNAME (var or secret), DOCKERHUB_TOKEN
+# (secret). Use a PUBLIC Docker Hub repo so instances can pull without creds.
 on:
   workflow_dispatch:
     inputs:
@@ -48,7 +51,7 @@ jobs:
       - run: pytest
 
   build-push:
-    name: build, scan & push
+    name: build, scan & push (Docker Hub)
     needs: test
     runs-on: ubuntu-latest
     outputs:
@@ -56,52 +59,40 @@ jobs:
       target: ${{ steps.meta.outputs.target }}
     steps:
       - uses: actions/checkout@v4
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: gha-app-build
+      - name: Preflight - Docker Hub credentials
+        env:
+          DH_USER: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+          DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          [ -n "$DH_USER" ] && [ -n "$DH_TOKEN" ] && exit 0
+          echo "::error::Set DOCKERHUB_USERNAME (var or secret) and DOCKERHUB_TOKEN (secret)."
+          exit 1
       - name: Resolve image coordinates
         id: meta
+        env:
+          DH_USER: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+          DH_REPO: ${{ vars.DOCKERHUB_REPO || 'banking-platform-api' }}
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-          REPO="${PROJECT}-${TARGET_ENV}-api"
-          TAG="sha-$(git rev-parse --short HEAD)"
-          IMAGE="${REGISTRY}/${REPO}:${TAG}"
-          echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
-          echo "repo=$REPO"         >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG"           >> "$GITHUB_OUTPUT"
+          TAG="${TARGET_ENV}-sha-$(git rev-parse --short HEAD)"
+          IMAGE="${DH_USER}/${DH_REPO}:${TAG}"
           echo "image=$IMAGE"       >> "$GITHUB_OUTPUT"
           echo "target=$TARGET_ENV" >> "$GITHUB_OUTPUT"
-      - name: Skip if image already exists (immutable tags)
-        id: exists
-        run: |
-          if aws ecr describe-images --repository-name "${{ steps.meta.outputs.repo }}" \
-               --image-ids imageTag="${{ steps.meta.outputs.tag }}" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Image ${{ steps.meta.outputs.image }} already exists; reusing."
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "Image: $IMAGE"
+      - name: Log in to Docker Hub
+        env:
+          DH_USER: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+          DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "$DH_TOKEN" | docker login --username "$DH_USER" --password-stdin
       - name: Build image
-        if: steps.exists.outputs.exists == 'false'
         run: docker build -t "${{ steps.meta.outputs.image }}" app
       - name: Install Trivy
-        if: steps.exists.outputs.exists == 'false'
         run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
       - name: Trivy scan (fail on HIGH/CRITICAL)
-        if: steps.exists.outputs.exists == 'false'
         run: |
           trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed \
             --scanners vuln --format table "${{ steps.meta.outputs.image }}"
-      - name: Push to ECR
-        if: steps.exists.outputs.exists == 'false'
-        run: |
-          aws ecr get-login-password --region "$AWS_REGION" \
-            | docker login --username AWS --password-stdin "${{ steps.meta.outputs.registry }}"
-          docker push "${{ steps.meta.outputs.image }}"
+      - name: Push to Docker Hub
+        run: docker push "${{ steps.meta.outputs.image }}"
 
   deploy:
     name: deploy to instances

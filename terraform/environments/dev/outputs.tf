@@ -33,11 +33,6 @@ output "ansible_ssm_bucket" {
   value       = module.platform.ansible_ssm_bucket
 }
 
-output "ecr_repository_url" {
-  description = "ECR repository for the app image."
-  value       = module.platform.ecr_repository_url
-}
-
 output "app_image_parameter" {
   description = "SSM parameter holding the current app image URI."
   value       = module.platform.app_image_parameter

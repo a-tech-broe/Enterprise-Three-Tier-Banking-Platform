@@ -21,7 +21,7 @@ GitHub ─► GitHub Actions ─► [ fmt · validate · tflint · checkov · pl
 VPC (3 AZ)
 ├── Public Subnets        → ALB (HTTPS w/ ACM, or HTTP)  +  NAT Gateways
 ├── Private App Subnets   → EC2 ASG: nginx :8080 → banking-api container :8081
-│                                    (CloudWatch agent, SSM, pulls image from ECR)
+│                                    (CloudWatch agent, SSM, pulls image from Docker Hub)
 └── Private DB Subnets    → Multi-AZ RDS PostgreSQL (KMS, Secrets Manager)
 ```
 
@@ -72,7 +72,7 @@ app/                    Banking API (FastAPI): accounts, transactions, transfers
 terraform/
   bootstrap/            S3 + DynamoDB + KMS remote-state backend (run once)
   modules/
-    vpc/ security-groups/ kms/ iam/ alb/ ec2/ rds/ cloudwatch/ dns/ ecr/
+    vpc/ security-groups/ kms/ iam/ alb/ ec2/ rds/ cloudwatch/ dns/
     platform/           composition module wiring everything together
   environments/
     dev/ qa/ uat/ prod/ thin per-env roots (backend + config-in-code)
@@ -136,7 +136,7 @@ infra-deploy (dispatch/push) ─► plan ─► approval ─► apply ─► Ans
 ```
 PR ─► app-ci (ruff · pytest · docker build · Trivy scan)
 
-app-deploy (dispatch/push) ─► test ─► build ─► Trivy scan ─► push ECR
+app-deploy (dispatch/push) ─► test ─► build ─► Trivy scan ─► push Docker Hub
                             ─► publish image URI to SSM ─► roll container on instances ─► verify
 ```
 
@@ -154,7 +154,7 @@ app-deploy (dispatch/push) ─► test ─► build ─► Trivy scan ─► pus
 - **Approval gates** — `apply` (infra) and `deploy` (app) bind to a GitHub
   Environment; add reviewers on `uat`/`prod` to gate production.
 - **App delivery is immutable** — images are tagged by git SHA, pushed to a
-  scan-on-push ECR repo; instances pull the pinned image on boot and on deploy.
+  Docker Hub repo (Trivy-scanned pre-push); instances pull the pinned image on boot and on deploy.
 
 ## Environments
 

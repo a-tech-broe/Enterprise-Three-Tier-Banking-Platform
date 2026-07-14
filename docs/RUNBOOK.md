@@ -63,11 +63,17 @@ automatically — no manual setup.
 
 ## Deploying the application
 
+**Config:** set `DOCKERHUB_USERNAME` (var or secret) and `DOCKERHUB_TOKEN` (secret,
+a Docker Hub access token). Use a **public** Docker Hub repo (default name
+`banking-platform-api`, override with `DOCKERHUB_REPO`) so instances pull without
+credentials. The `deploy` job also needs the role's SSM permissions
+(`ssm:PutParameter` + `ssm:SendCommand`), included in `docs/iam-deploy-policy.json`.
+
 Infra and app deploy through **separate** pipelines. After the infra exists:
 
 **Actions → app-deploy → Run workflow → choose env.** It runs `ruff` + `pytest`,
 builds the image, scans it with Trivy (fails on HIGH/CRITICAL), pushes to the
-env's ECR repo tagged by git SHA, publishes the image URI to SSM
+Docker Hub repo tagged `<env>-sha-<short>`, publishes the image ref to SSM
 (`/banking-platform/<env>/app_image`), and rolls the container on the app
 instances via SSM (each runs `systemctl restart banking-app`, which re-pulls and
 restarts). New/scaled ASG instances self-deploy the same image on boot from
@@ -77,7 +83,7 @@ Locally, from `app/`: `ruff check src tests && pytest`, then
 `docker build -t banking-platform-api .`.
 
 Roll back by re-running `app-deploy` for the previous commit (its SHA-tagged image
-is still in ECR), or `aws ssm put-parameter --name /banking-platform/<env>/app_image`
+is still on Docker Hub), or `aws ssm put-parameter --name /banking-platform/<env>/app_image`
 with the prior image URI and restart the service.
 
 ## Enabling HTTPS on a domain

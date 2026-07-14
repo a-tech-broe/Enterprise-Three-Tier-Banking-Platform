@@ -27,12 +27,6 @@ variable "ssm_bucket_arns" {
   default     = []
 }
 
-variable "ecr_repository_arns" {
-  description = "ECR repository ARNs the instances may pull application images from."
-  type        = list(string)
-  default     = []
-}
-
 variable "ssm_parameter_arns" {
   description = "SSM Parameter Store ARNs the instances may read (e.g. the current app image URI)."
   type        = list(string)
