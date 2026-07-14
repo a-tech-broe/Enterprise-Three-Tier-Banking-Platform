@@ -1,37 +1,37 @@
-version: '3.9'
-
+# Local development stack with hot reload:
+#   docker compose -f docker-compose.dev.yml up --build
+#   web (Vite) -> http://localhost:5173   api -> http://localhost:8081/docs
 services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: skybroe
-      POSTGRES_USER: skybroe
-      POSTGRES_PASSWORD: skybroe_dev
+      POSTGRES_DB: banking
+      POSTGRES_USER: bankadmin
+      POSTGRES_PASSWORD: banking_dev
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U skybroe"]
+      test: ["CMD-SHELL", "pg_isready -U bankadmin"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  backend:
+  api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: Dockerfile
+    # Override the production entrypoint with autoreload and mount the source.
+    command: ["uvicorn", "banking.main:app", "--host", "0.0.0.0", "--port", "8081", "--reload"]
     environment:
-      NODE_ENV: development
-      PORT: 3001
-      DB_URL: postgresql://skybroe:skybroe_dev@db:5432/skybroe
-      FAA_CLIENT_ID: ${FAA_CLIENT_ID:-}
-      FAA_CLIENT_SECRET: ${FAA_CLIENT_SECRET:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ENVIRONMENT: local
+      DATABASE_URL: postgresql+psycopg://bankadmin:banking_dev@db:5432/banking
+      CORS_ORIGINS: "*"
     volumes:
-      - ./backend/src:/app/src
+      - ./src:/app/src
     ports:
-      - "3001:3001"
+      - "8081:8081"
     depends_on:
       db:
         condition: service_healthy
@@ -41,29 +41,14 @@ services:
       context: ./web
       dockerfile: Dockerfile.dev
     environment:
-      VITE_API_URL: http://localhost:3001
+      VITE_API_URL: http://localhost:8081
     volumes:
       - ./web/src:/app/src
       - ./web/index.html:/app/index.html
     ports:
       - "5173:5173"
     depends_on:
-      - backend
-
-  mobile:
-    build:
-      context: ./mobile
-      dockerfile: Dockerfile.dev
-    environment:
-      EXPO_PUBLIC_API_URL: http://localhost:3001
-    volumes:
-      - ./mobile/src:/app/src
-      - ./mobile/App.tsx:/app/App.tsx
-    ports:
-      - "8081:8081"
-      - "19000:19000"
-      - "19001:19001"
-    network_mode: host
+      - api
 
 volumes:
   postgres_data_dev:
