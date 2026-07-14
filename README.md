@@ -25,9 +25,9 @@ VPC (3 AZ)
 └── Private DB Subnets    → Multi-AZ RDS PostgreSQL (KMS, Secrets Manager)
 ```
 
-The application tier is a FastAPI banking service ([`app/`](app/)) — accounts,
-transactions, and transfers with ledger integrity — that reads its DB credentials
-from Secrets Manager and runs as a container behind nginx.
+The application ([`app/`](app/)) is a FastAPI banking service — accounts,
+transactions, and transfers with ledger integrity, DB credentials from Secrets
+Manager — running as a container behind nginx, plus a React web UI that calls it.
 
 Full diagrams and design rationale: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -65,10 +65,10 @@ by `Environment` + `Role` tags.
 ## Repository layout
 
 ```
-app/                    Banking API (FastAPI): accounts, transactions, transfers
-  src/banking/          config · database · models · services · routers
-  tests/                pytest suite (in-memory SQLite, no AWS needed)
-  Dockerfile  requirements*.txt  pyproject.toml
+app/                    Banking application
+  src/banking/  tests/  FastAPI API (accounts, transactions, transfers) + pytest
+  web/                  React + Vite banking UI (calls the API)
+  Dockerfile  docker-compose.yml  requirements*.txt  pyproject.toml
 terraform/
   bootstrap/            S3 + DynamoDB + KMS remote-state backend (run once)
   modules/
@@ -103,8 +103,14 @@ scripts/        bootstrap-backend.sh · setup-oidc.sh
    (a scoped customer-managed policy if it can create one, else AWS-managed
    PowerUser + IAMFull). Then delete the admin keys — everything else runs on
    short-lived OIDC.
-3. **Actions → deploy → Run workflow → choose env** — plan → approval → apply →
-   Ansible (over SSM) → smoke test → Teams.
+3. **Actions → infra-deploy → Run workflow → choose env** — plan → approval →
+   apply → Ansible (over SSM) → smoke test → Teams. Provisions the infrastructure
+   and the app runtime (Docker + a self-deploying `banking-app` service).
+4. **Ship the app** — add `DOCKERHUB_USERNAME` (variable) and `DOCKERHUB_TOKEN`
+   (secret) for a **public** Docker Hub repo, then **Actions → app-deploy** —
+   test → build → Trivy scan → push to Docker Hub → roll the container on the
+   instances. Run `infra-deploy` at least once before the first `app-deploy` so
+   the instances have the container runtime.
 
 Full setup, IAM policy details, and the operations runbook:
 [`docs/RUNBOOK.md`](docs/RUNBOOK.md) · [`docs/SECURITY.md`](docs/SECURITY.md).
