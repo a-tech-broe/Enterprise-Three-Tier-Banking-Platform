@@ -27,7 +27,7 @@ module "platform" {
   single_nat_gateway       = true
 
   # Compute
-  instance_type        = "t3.small"
+  instance_type        = "m5.xlarge"
   asg_min_size         = 1
   asg_max_size         = 3
   asg_desired_capacity = 1
