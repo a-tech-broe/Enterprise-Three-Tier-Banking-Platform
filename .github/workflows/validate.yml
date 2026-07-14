@@ -6,12 +6,17 @@ on:
     paths:
       - "terraform/**"
       - "ansible/**"
-      - ".github/workflows/**"
+      - ".tflint.hcl"
+      - ".checkov.yml"
+      - ".github/workflows/validate.yml"
   push:
     branches: [main, dev]
     paths:
       - "terraform/**"
       - "ansible/**"
+      - ".tflint.hcl"
+      - ".checkov.yml"
+      - ".github/workflows/validate.yml"
   workflow_dispatch:
 
 permissions:
