@@ -16,6 +16,9 @@ export default function AccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'deposit' | 'withdraw' | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
 
   async function refresh() {
     try {
@@ -48,6 +51,30 @@ export default function AccountPage() {
     } finally {
       setBusy(null);
     }
+  }
+
+  async function runAction(fn: () => Promise<unknown>) {
+    setError(null);
+    setActionBusy(true);
+    try {
+      await fn();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  function saveRename() {
+    const name = nameDraft.trim();
+    if (!name) return;
+    runAction(() => api.updateAccount(id, { holder_name: name })).then(() => setRenaming(false));
+  }
+
+  function closeAccount() {
+    if (!window.confirm('Close this account? This cannot be undone.')) return;
+    runAction(() => api.updateAccount(id, { status: 'closed' }));
   }
 
   if (loading) {
@@ -104,57 +131,151 @@ export default function AccountPage() {
         </p>
       </section>
 
-      {/* Move money */}
-      <section className="card p-5 sm:p-6">
-        <h2 className="font-semibold text-slate-900 dark:text-white">Move money</h2>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="flex-1">
-            <span className="label">Amount ({account.currency})</span>
-            <input
-              className="input"
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-            />
-          </label>
-          <div className="flex gap-3">
-            <button
-              className="btn-success flex-1 sm:flex-none"
-              disabled={busy !== null}
-              onClick={() => move('deposit')}
-            >
-              {busy === 'deposit' ? <Spinner /> : <ArrowDownLeft width={18} height={18} />}
-              Deposit
-            </button>
-            <button
-              className="btn-ghost flex-1 sm:flex-none"
-              disabled={busy !== null}
-              onClick={() => move('withdraw')}
-            >
-              {busy === 'withdraw' ? <Spinner /> : <ArrowUpRight width={18} height={18} />}
-              Withdraw
-            </button>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {PRESETS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setAmount(String(p))}
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10"
-            >
-              +{p}
-            </button>
-          ))}
-        </div>
-        {error && (
-          <div className="mt-3">
-            <Notice tone="error">{error}</Notice>
-          </div>
-        )}
-      </section>
+      {error && <Notice tone="error">{error}</Notice>}
+
+      {account.status === 'closed' ? (
+        <Notice tone="error">This account is closed and can no longer transact.</Notice>
+      ) : (
+        <>
+          {/* Move money */}
+          <section className="card p-5 sm:p-6">
+            <h2 className="font-semibold text-slate-900 dark:text-white">Move money</h2>
+            {account.status === 'frozen' && (
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                This account is frozen. Unfreeze it below to deposit or withdraw.
+              </p>
+            )}
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className="flex-1">
+                <span className="label">Amount ({account.currency})</span>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  disabled={account.status !== 'active'}
+                />
+              </label>
+              <div className="flex gap-3">
+                <button
+                  className="btn-success flex-1 sm:flex-none"
+                  disabled={busy !== null || account.status !== 'active'}
+                  onClick={() => move('deposit')}
+                >
+                  {busy === 'deposit' ? <Spinner /> : <ArrowDownLeft width={18} height={18} />}
+                  Deposit
+                </button>
+                <button
+                  className="btn-ghost flex-1 sm:flex-none"
+                  disabled={busy !== null || account.status !== 'active'}
+                  onClick={() => move('withdraw')}
+                >
+                  {busy === 'withdraw' ? <Spinner /> : <ArrowUpRight width={18} height={18} />}
+                  Withdraw
+                </button>
+              </div>
+            </div>
+            {account.status === 'active' && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {PRESETS.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setAmount(String(p))}
+                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10"
+                  >
+                    +{p}
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Manage account */}
+          <section className="card p-5 sm:p-6">
+            <h2 className="font-semibold text-slate-900 dark:text-white">Manage account</h2>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+              {renaming ? (
+                <>
+                  <label className="flex-1">
+                    <span className="label">Account name</span>
+                    <input
+                      className="input"
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      autoFocus
+                    />
+                  </label>
+                  <div className="flex gap-2">
+                    <button className="btn-primary" disabled={actionBusy} onClick={saveRename}>
+                      {actionBusy && <Spinner />}
+                      Save
+                    </button>
+                    <button className="btn-ghost" type="button" onClick={() => setRenaming(false)}>
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex w-full items-center justify-between gap-3">
+                  <div>
+                    <p className="label mb-0">Account name</p>
+                    <p className="font-medium text-slate-900 dark:text-white">
+                      {account.holder_name}
+                    </p>
+                  </div>
+                  <button
+                    className="btn-ghost"
+                    type="button"
+                    onClick={() => {
+                      setNameDraft(account.holder_name);
+                      setRenaming(true);
+                    }}
+                  >
+                    Rename
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+              {account.status === 'active' ? (
+                <button
+                  className="btn-ghost"
+                  disabled={actionBusy}
+                  onClick={() => runAction(() => api.updateAccount(id, { status: 'frozen' }))}
+                >
+                  Freeze account
+                </button>
+              ) : (
+                <button
+                  className="btn-ghost"
+                  disabled={actionBusy}
+                  onClick={() => runAction(() => api.updateAccount(id, { status: 'active' }))}
+                >
+                  Unfreeze account
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={closeAccount}
+                disabled={actionBusy || account.balance_cents !== 0}
+                title={account.balance_cents !== 0 ? 'Balance must be zero to close' : undefined}
+                className="btn bg-rose-50 text-rose-600 hover:bg-rose-100 focus-visible:ring-rose-400/30 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20"
+              >
+                Close account
+              </button>
+            </div>
+            {account.balance_cents !== 0 && (
+              <p className="mt-2 text-xs text-slate-400">
+                Withdraw or transfer the remaining balance to close this account.
+              </p>
+            )}
+          </section>
+        </>
+      )}
 
       {/* Transactions */}
       <section>

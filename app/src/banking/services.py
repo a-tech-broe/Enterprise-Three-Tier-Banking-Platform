@@ -63,6 +63,27 @@ def get_account(db: Session, account_id: str, owner_id: str | None = None) -> Ac
     return account
 
 
+def update_account(
+    db: Session,
+    account_id: str,
+    owner_id: str,
+    holder_name: str | None = None,
+    status: AccountStatus | None = None,
+) -> Account:
+    account = get_account(db, account_id, owner_id)
+    if account.status == AccountStatus.closed:
+        raise errors.InvalidOperation("a closed account cannot be modified")
+    if holder_name is not None:
+        account.holder_name = holder_name.strip()
+    if status is not None and status != account.status:
+        if status == AccountStatus.closed and account.balance_cents != 0:
+            raise errors.InvalidOperation("account must have a zero balance to close")
+        account.status = status
+    db.commit()
+    db.refresh(account)
+    return account
+
+
 def list_accounts(
     db: Session, owner_id: str, limit: int = 100, offset: int = 0
 ) -> list[Account]:

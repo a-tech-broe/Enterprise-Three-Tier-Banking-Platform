@@ -40,6 +40,13 @@ class AccountCreate(BaseModel):
     currency: str = Field(default="USD", min_length=3, max_length=3)
 
 
+class AccountUpdate(BaseModel):
+    """Rename and/or change status (freeze/unfreeze/close)."""
+
+    holder_name: str | None = Field(default=None, min_length=1, max_length=120)
+    status: AccountStatus | None = None
+
+
 class AccountOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

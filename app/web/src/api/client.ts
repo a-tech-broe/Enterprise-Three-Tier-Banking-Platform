@@ -1,4 +1,4 @@
-import type { Account, AuthResponse, Transaction, User } from '../types';
+import type { Account, AccountStatus, AuthResponse, Transaction, User } from '../types';
 
 // Base URL for the banking API. Empty (default) means same-origin / dev proxy;
 // set VITE_API_URL at build time to point the SPA at the ALB/API host.
@@ -70,6 +70,11 @@ export const api = {
 
   listAccounts: () => request<Account[]>('/api/v1/accounts'),
   getAccount: (id: string) => request<Account>(`/api/v1/accounts/${id}`),
+  updateAccount: (id: string, patch: { holder_name?: string; status?: AccountStatus }) =>
+    request<Account>(`/api/v1/accounts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
   createAccount: (holder_name: string, currency: string) =>
     request<Account>('/api/v1/accounts', {
       method: 'POST',

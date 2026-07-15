@@ -11,6 +11,7 @@ from ..models import User
 from ..schemas import (
     AccountCreate,
     AccountOut,
+    AccountUpdate,
     MoneyOp,
     TransactionOut,
 )
@@ -46,6 +47,19 @@ def get_account(
     user: User = Depends(get_current_user),
 ) -> AccountOut:
     return AccountOut.model_validate(services.get_account(db, account_id, user.id))
+
+
+@router.patch("/{account_id}", response_model=AccountOut)
+def update_account(
+    account_id: str,
+    payload: AccountUpdate,
+    db: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> AccountOut:
+    account = services.update_account(
+        db, account_id, user.id, payload.holder_name, payload.status
+    )
+    return AccountOut.model_validate(account)
 
 
 @router.post("/{account_id}/deposit", response_model=TransactionOut)
