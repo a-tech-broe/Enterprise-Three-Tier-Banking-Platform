@@ -8,3 +8,9 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 psycopg[binary]==3.2.3
 boto3==1.35.90
+# Auth: JWT sessions + password hashing + email validation.
+# PyJWT >= 2.13.0 fixes CVE-2026-32597 (crit header) and CVE-2026-48526
+# (auth bypass via forged JWTs) — both HIGH, flagged by the image scan.
+PyJWT==2.13.0
+bcrypt==4.2.1
+email-validator==2.2.0

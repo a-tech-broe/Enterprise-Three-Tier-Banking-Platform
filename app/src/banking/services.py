@@ -8,42 +8,173 @@ Invariants enforced here:
 """
 from __future__ import annotations
 
-from sqlalchemy import select
+import datetime as dt
+
+from sqlalchemy import String, cast, or_, select
 from sqlalchemy.orm import Session
 
-from . import errors
-from .models import Account, AccountStatus, Transaction, TxnType
+from . import errors, security
+from .models import Account, AccountStatus, Transaction, TxnType, User
 
 
-def create_account(db: Session, holder_name: str, currency: str = "USD") -> Account:
-    account = Account(holder_name=holder_name, currency=currency.upper(), balance_cents=0)
+# --- Users / auth ----------------------------------------------------------
+def get_user_by_email(db: Session, email: str) -> User | None:
+    return db.scalar(select(User).where(User.email == email.strip().lower()))
+
+
+def register_user(db: Session, email: str, full_name: str, password: str) -> User:
+    email = email.strip().lower()
+    if get_user_by_email(db, email) is not None:
+        raise errors.EmailAlreadyRegistered("that email is already registered")
+    user = User(
+        email=email,
+        full_name=full_name.strip(),
+        password_hash=security.hash_password(password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def authenticate_user(db: Session, email: str, password: str) -> User:
+    user = get_user_by_email(db, email)
+    if user is None or not security.verify_password(password, user.password_hash):
+        raise errors.InvalidCredentials("incorrect email or password")
+    return user
+
+
+# --- Accounts --------------------------------------------------------------
+def create_account(
+    db: Session, owner_id: str, holder_name: str, currency: str = "USD"
+) -> Account:
+    account = Account(
+        user_id=owner_id, holder_name=holder_name, currency=currency.upper(), balance_cents=0
+    )
     db.add(account)
     db.commit()
     db.refresh(account)
     return account
 
 
-def get_account(db: Session, account_id: str) -> Account:
+def get_account(db: Session, account_id: str, owner_id: str | None = None) -> Account:
     account = db.get(Account, account_id)
-    if account is None:
+    # Return 404 (not 403) for someone else's account so ownership can't be probed.
+    if account is None or (owner_id is not None and account.user_id != owner_id):
         raise errors.AccountNotFound(f"account {account_id} not found")
     return account
 
 
-def list_accounts(db: Session, limit: int = 100, offset: int = 0) -> list[Account]:
-    stmt = select(Account).order_by(Account.created_at.desc()).limit(limit).offset(offset)
-    return list(db.scalars(stmt))
+def update_account(
+    db: Session,
+    account_id: str,
+    owner_id: str,
+    holder_name: str | None = None,
+    status: AccountStatus | None = None,
+) -> Account:
+    account = get_account(db, account_id, owner_id)
+    if account.status == AccountStatus.closed:
+        raise errors.InvalidOperation("a closed account cannot be modified")
+    if holder_name is not None:
+        account.holder_name = holder_name.strip()
+    if status is not None and status != account.status:
+        if status == AccountStatus.closed and account.balance_cents != 0:
+            raise errors.InvalidOperation("account must have a zero balance to close")
+        account.status = status
+    db.commit()
+    db.refresh(account)
+    return account
 
 
-def list_transactions(db: Session, account_id: str, limit: int = 100) -> list[Transaction]:
-    get_account(db, account_id)  # 404 if missing
+def list_accounts(
+    db: Session, owner_id: str, limit: int = 100, offset: int = 0
+) -> list[Account]:
     stmt = (
-        select(Transaction)
-        .where(Transaction.account_id == account_id)
-        .order_by(Transaction.created_at.desc())
+        select(Account)
+        .where(Account.user_id == owner_id)
+        .order_by(Account.created_at.desc())
         .limit(limit)
+        .offset(offset)
     )
     return list(db.scalars(stmt))
+
+
+def list_transactions(
+    db: Session,
+    account_id: str,
+    owner_id: str,
+    limit: int = 100,
+    start: dt.date | None = None,
+    end: dt.date | None = None,
+    query: str | None = None,
+) -> list[Transaction]:
+    get_account(db, account_id, owner_id)  # 404 if missing or not owned
+    stmt = select(Transaction).where(Transaction.account_id == account_id)
+    if start is not None:
+        stmt = stmt.where(Transaction.created_at >= dt.datetime.combine(start, dt.time.min))
+    if end is not None:
+        stmt = stmt.where(Transaction.created_at <= dt.datetime.combine(end, dt.time.max))
+    if query:
+        like = f"%{query.strip()}%"
+        # Match the free-text reference or the transaction type (e.g. "deposit").
+        stmt = stmt.where(
+            or_(Transaction.reference.ilike(like), cast(Transaction.type, String).ilike(like))
+        )
+    stmt = stmt.order_by(Transaction.created_at.desc()).limit(limit)
+    return list(db.scalars(stmt))
+
+
+def account_insights(db: Session, account_id: str, owner_id: str, months: int = 6) -> dict:
+    """Per-account spending insights: monthly in/out plus a by-type breakdown.
+
+    Scoped to one account so everything is a single currency (aggregating across
+    currencies would be meaningless). Aggregated in Python to stay portable
+    across SQLite (tests) and PostgreSQL.
+    """
+    account = get_account(db, account_id, owner_id)
+    txns = list(db.scalars(select(Transaction).where(Transaction.account_id == account_id)))
+
+    inflow_types = {TxnType.deposit, TxnType.transfer_in}
+    by_type: dict[TxnType, list[int]] = {t: [0, 0] for t in TxnType}  # [total_cents, count]
+    monthly: dict[str, list[int]] = {}  # "YYYY-MM" -> [in, out]
+    total_in = total_out = 0
+
+    for t in txns:
+        by_type[t.type][0] += t.amount_cents
+        by_type[t.type][1] += 1
+        bucket = monthly.setdefault(t.created_at.strftime("%Y-%m"), [0, 0])
+        if t.type in inflow_types:
+            total_in += t.amount_cents
+            bucket[0] += t.amount_cents
+        else:
+            total_out += t.amount_cents
+            bucket[1] += t.amount_cents
+
+    # Continuous last-N-months series (fill empty months with zeros).
+    today = dt.date.today()
+    year, month = today.year, today.month
+    keys: list[str] = []
+    for _ in range(months):
+        keys.append(f"{year:04d}-{month:02d}")
+        month -= 1
+        if month == 0:
+            month, year = 12, year - 1
+    keys.reverse()
+
+    series = [
+        {"month": k, "in_cents": monthly.get(k, [0, 0])[0], "out_cents": monthly.get(k, [0, 0])[1]}
+        for k in keys
+    ]
+    return {
+        "currency": account.currency,
+        "total_in_cents": total_in,
+        "total_out_cents": total_out,
+        "net_cents": total_in - total_out,
+        "monthly": series,
+        "by_type": [
+            {"type": t, "total_cents": by_type[t][0], "count": by_type[t][1]} for t in TxnType
+        ],
+    }
 
 
 def _existing_by_key(db: Session, key: str | None) -> Transaction | None:
@@ -61,6 +192,7 @@ def deposit(
     db: Session,
     account_id: str,
     amount_cents: int,
+    owner_id: str,
     reference: str | None = None,
     idempotency_key: str | None = None,
 ) -> Transaction:
@@ -71,7 +203,7 @@ def deposit(
     if existing:
         return existing
 
-    account = get_account(db, account_id)
+    account = get_account(db, account_id, owner_id)
     _require_active(account)
 
     account.balance_cents += amount_cents
@@ -93,6 +225,7 @@ def withdraw(
     db: Session,
     account_id: str,
     amount_cents: int,
+    owner_id: str,
     reference: str | None = None,
     idempotency_key: str | None = None,
 ) -> Transaction:
@@ -103,7 +236,7 @@ def withdraw(
     if existing:
         return existing
 
-    account = get_account(db, account_id)
+    account = get_account(db, account_id, owner_id)
     _require_active(account)
     if account.balance_cents < amount_cents:
         raise errors.InsufficientFunds("insufficient funds")
@@ -125,6 +258,7 @@ def withdraw(
 
 def transfer(
     db: Session,
+    owner_id: str,
     from_account_id: str,
     to_account_id: str,
     amount_cents: int,
@@ -148,8 +282,9 @@ def transfer(
         )
         return existing, credit  # type: ignore[return-value]
 
-    src = get_account(db, from_account_id)
-    dst = get_account(db, to_account_id)
+    # Both legs must belong to the caller (internal transfers between own accounts).
+    src = get_account(db, from_account_id, owner_id)
+    dst = get_account(db, to_account_id, owner_id)
     _require_active(src)
     _require_active(dst)
     if src.currency != dst.currency:

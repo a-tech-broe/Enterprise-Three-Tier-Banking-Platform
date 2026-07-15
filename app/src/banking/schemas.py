@@ -3,14 +3,48 @@ from __future__ import annotations
 
 import datetime as dt
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from .models import AccountStatus, TxnType
+from .models import AccountStatus, TxnType, UserRole
+
+
+class UserRegister(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: EmailStr
+    full_name: str
+    role: UserRole
+    created_at: dt.datetime
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
 
 
 class AccountCreate(BaseModel):
     holder_name: str = Field(min_length=1, max_length=120)
     currency: str = Field(default="USD", min_length=3, max_length=3)
+
+
+class AccountUpdate(BaseModel):
+    """Rename and/or change status (freeze/unfreeze/close)."""
+
+    holder_name: str | None = Field(default=None, min_length=1, max_length=120)
+    status: AccountStatus | None = None
 
 
 class AccountOut(BaseModel):
@@ -51,6 +85,27 @@ class TransactionOut(BaseModel):
     counterparty_account_id: str | None
     reference: str | None
     created_at: dt.datetime
+
+
+class MonthlyPoint(BaseModel):
+    month: str  # "YYYY-MM"
+    in_cents: int
+    out_cents: int
+
+
+class TypeBreakdown(BaseModel):
+    type: TxnType
+    total_cents: int
+    count: int
+
+
+class InsightsOut(BaseModel):
+    currency: str
+    total_in_cents: int
+    total_out_cents: int
+    net_cents: int
+    monthly: list[MonthlyPoint]
+    by_type: list[TypeBreakdown]
 
 
 class HealthOut(BaseModel):

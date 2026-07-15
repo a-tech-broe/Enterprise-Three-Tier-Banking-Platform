@@ -40,7 +40,16 @@ export function TxnIcon({ type }: { type: TxnType }) {
 }
 
 /** Deterministic coloured initials avatar for an account holder. */
-export function Avatar({ name, seed }: { name: string; seed: string }) {
+export function Avatar({
+  name,
+  seed,
+  size = 'md',
+}: {
+  name: string;
+  seed: string;
+  size?: 'sm' | 'md';
+}) {
+  const dims = size === 'sm' ? 'h-8 w-8 text-xs' : 'h-11 w-11 text-sm';
   const palette = [
     'bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-200',
     'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200',
@@ -59,7 +68,7 @@ export function Avatar({ name, seed }: { name: string; seed: string }) {
     .join('');
   return (
     <span
-      className={`grid h-11 w-11 shrink-0 place-items-center rounded-full text-sm font-semibold ${palette[hash % palette.length]}`}
+      className={`grid ${dims} shrink-0 place-items-center rounded-full font-semibold ${palette[hash % palette.length]}`}
     >
       {initials || '?'}
     </span>

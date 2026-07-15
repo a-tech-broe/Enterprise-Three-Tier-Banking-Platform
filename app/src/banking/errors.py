@@ -34,3 +34,18 @@ class CurrencyMismatch(BankingError):
 class InvalidOperation(BankingError):
     status_code = 400
     code = "invalid_operation"
+
+
+class EmailAlreadyRegistered(BankingError):
+    status_code = 409
+    code = "email_taken"
+
+
+class InvalidCredentials(BankingError):
+    status_code = 401
+    code = "invalid_credentials"
+
+
+class NotAuthenticated(BankingError):
+    status_code = 401
+    code = "not_authenticated"

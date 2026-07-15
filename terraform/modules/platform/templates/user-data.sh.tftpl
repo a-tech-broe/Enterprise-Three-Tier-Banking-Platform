@@ -72,6 +72,13 @@ if [ -z "$IMAGE" ] || [ "$IMAGE" = "none" ]; then
   exit 0
 fi
 
+# JWT signing secret (encrypted SecureString). Shared across instances so tokens
+# validate behind the ALB. Only injected when non-empty, so a fetch failure
+# leaves the app on its own default rather than an empty (broken) secret.
+JWT_SECRET="$(aws ssm get-parameter --name "${jwt_secret_param}" --with-decryption --region "$REGION" --query 'Parameter.Value' --output text 2>/dev/null || echo '')"
+JWT_ARG=()
+if [ -n "$JWT_SECRET" ]; then JWT_ARG=(-e "JWT_SECRET=$JWT_SECRET"); fi
+
 # Registry-aware login: ECR needs a token; a public Docker Hub image needs none.
 REGISTRY="$${IMAGE%%/*}"
 if [[ "$REGISTRY" == *.dkr.ecr.*.amazonaws.com ]]; then
@@ -85,6 +92,7 @@ docker run -d --name banking-app --restart unless-stopped \
   -e AWS_REGION="$REGION" \
   -e DB_SECRET_ARN="${db_secret_arn}" \
   -e DB_NAME="${db_name}" \
+  "$${JWT_ARG[@]}" \
   "$IMAGE"
 RUNAPP
 chmod +x /opt/banking-platform/run-app.sh

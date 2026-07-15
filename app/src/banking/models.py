@@ -25,6 +25,11 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+class UserRole(str, enum.Enum):
+    user = "user"
+    admin = "admin"
+
+
 class AccountStatus(str, enum.Enum):
     active = "active"
     frozen = "frozen"
@@ -38,10 +43,32 @@ class TxnType(str, enum.Enum):
     transfer_out = "transfer_out"
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole), nullable=False, default=UserRole.user
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    accounts: Mapped[list[Account]] = relationship(
+        back_populates="owner", cascade="all, delete-orphan"
+    )
+
+
 class Account(Base):
     __tablename__ = "accounts"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=False, index=True
+    )
     holder_name: Mapped[str] = mapped_column(String(120), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     balance_cents: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
@@ -52,6 +79,7 @@ class Account(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
+    owner: Mapped[User] = relationship(back_populates="accounts")
     transactions: Mapped[list[Transaction]] = relationship(
         back_populates="account", cascade="all, delete-orphan"
     )

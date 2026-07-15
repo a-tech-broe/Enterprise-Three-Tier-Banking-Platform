@@ -114,16 +114,39 @@ resource "aws_ssm_parameter" "app_image" {
 }
 
 # ---------------------------------------------------------------------------
+# JWT signing secret for the app's auth tokens. Generated once, stored as a
+# KMS-encrypted SecureString, and fetched by the instance at container start
+# (see user-data). Shared across instances so tokens validate behind the ALB.
+# ---------------------------------------------------------------------------
+resource "random_password" "jwt_secret" {
+  length  = 48
+  special = false # keep it shell/env-safe
+}
+
+resource "aws_ssm_parameter" "jwt_secret" {
+  name        = "/${var.project}/${var.environment}/jwt_secret"
+  description = "HS256 signing secret for banking-api auth tokens."
+  type        = "SecureString"
+  key_id      = module.kms.key_arn
+  value       = random_password.jwt_secret.result
+
+  tags = local.common_tags
+}
+
+# ---------------------------------------------------------------------------
 # IAM (instance role: SSM, CloudWatch, read DB secret, read image parameter)
 # ---------------------------------------------------------------------------
 module "iam" {
   source = "../iam"
 
-  name               = local.name_prefix
-  secret_arns        = [module.rds.secret_arn]
-  kms_key_arns       = [module.kms.key_arn]
-  ssm_bucket_arns    = [aws_s3_bucket.ansible_ssm.arn]
-  ssm_parameter_arns = [aws_ssm_parameter.app_image.arn]
+  name            = local.name_prefix
+  secret_arns     = [module.rds.secret_arn]
+  kms_key_arns    = [module.kms.key_arn]
+  ssm_bucket_arns = [aws_s3_bucket.ansible_ssm.arn]
+  ssm_parameter_arns = [
+    aws_ssm_parameter.app_image.arn,
+    aws_ssm_parameter.jwt_secret.arn,
+  ]
 
   tags = local.common_tags
 }
@@ -338,15 +361,16 @@ locals {
   # nginx that answers the ALB health check on first boot, so ASG scale-out and
   # instance refresh always yield healthy instances. Ansible converges the rest.
   user_data = templatefile("${path.module}/templates/user-data.sh.tftpl", {
-    name_prefix     = local.name_prefix
-    environment     = var.environment
-    aws_region      = var.aws_region
-    app_port        = var.app_port
-    upstream_port   = var.app_upstream_port
-    health_path     = var.health_check_path
-    app_image_param = aws_ssm_parameter.app_image.name
-    db_secret_arn   = module.rds.secret_arn
-    db_name         = var.db_name
+    name_prefix      = local.name_prefix
+    environment      = var.environment
+    aws_region       = var.aws_region
+    app_port         = var.app_port
+    upstream_port    = var.app_upstream_port
+    health_path      = var.health_check_path
+    app_image_param  = aws_ssm_parameter.app_image.name
+    jwt_secret_param = aws_ssm_parameter.jwt_secret.name
+    db_secret_arn    = module.rds.secret_arn
+    db_name          = var.db_name
   })
 }
 

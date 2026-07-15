@@ -1,6 +1,8 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/useTheme';
-import { BankIcon, MoonIcon, SunIcon } from './icons';
+import { BankIcon, LogOutIcon, MoonIcon, SunIcon } from './icons';
+import { Avatar } from './ui';
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   [
@@ -12,6 +14,13 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 
 export default function NavBar() {
   const [theme, toggleTheme] = useTheme();
+  const { user, logout } = useAuth();
+  const nav = useNavigate();
+
+  function onLogout() {
+    logout();
+    nav('/login', { replace: true });
+  }
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur-md dark:border-slate-800/70 dark:bg-slate-950/70">
@@ -30,14 +39,35 @@ export default function NavBar() {
           Transfer
         </NavLink>
 
-        <button
-          type="button"
-          onClick={toggleTheme}
-          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
-        >
-          {theme === 'dark' ? <SunIcon width={18} height={18} /> : <MoonIcon width={18} height={18} />}
-        </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+          >
+            {theme === 'dark' ? <SunIcon width={18} height={18} /> : <MoonIcon width={18} height={18} />}
+          </button>
+
+          {user && (
+            <>
+              <span className="ml-1 hidden items-center gap-2 sm:flex">
+                <Avatar name={user.full_name} seed={user.id} size="sm" />
+                <span className="max-w-[9rem] truncate text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {user.full_name}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={onLogout}
+                aria-label="Sign out"
+                className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 dark:text-slate-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+              >
+                <LogOutIcon width={18} height={18} />
+              </button>
+            </>
+          )}
+        </div>
       </nav>
     </header>
   );

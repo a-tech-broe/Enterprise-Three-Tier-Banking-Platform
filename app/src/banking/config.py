@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     # Comma-separated allowed origins for the web UI. Default "*" for the demo.
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
 
+    # Auth. jwt_secret MUST be set (and shared across instances) in real
+    # deployments; the default is for local dev/tests only. Tokens signed with a
+    # per-process random secret would be rejected across a multi-instance ALB.
+    jwt_secret: str = Field(
+        default="dev-insecure-change-me-set-JWT_SECRET-in-prod", alias="JWT_SECRET"
+    )
+    jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
+    jwt_expire_minutes: int = Field(default=720, alias="JWT_EXPIRE_MINUTES")
+
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 

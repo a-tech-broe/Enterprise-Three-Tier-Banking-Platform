@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, api } from '../api/client';
-import { ArrowDownLeft, ArrowLeft, ArrowUpRight } from '../components/icons';
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, DownloadIcon } from '../components/icons';
+import InsightsPanel from '../components/InsightsPanel';
 import { Notice, Spinner, StatusBadge, TxnIcon, txnMeta } from '../components/ui';
 import { formatMoney, relativeTime, toCents } from '../lib/money';
-import type { Account, Transaction } from '../types';
+import type { Account, Insights, Transaction } from '../types';
 
 const PRESETS = [10, 50, 100, 500];
+const EMPTY_FILTERS = { start: '', end: '', q: '' };
 
 export default function AccountPage() {
   const { id = '' } = useParams();
@@ -16,12 +18,32 @@ export default function AccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'deposit' | 'withdraw' | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [exporting, setExporting] = useState(false);
+  const [insights, setInsights] = useState<Insights | null>(null);
+  const hasFilters = Boolean(filters.q || filters.start || filters.end);
+
+  async function loadTxns() {
+    try {
+      setTxns(await api.transactions(id, filters));
+    } catch {
+      /* keep the prior list if a filter query fails */
+    }
+  }
 
   async function refresh() {
     try {
-      const [acct, tx] = await Promise.all([api.getAccount(id), api.transactions(id)]);
+      const [acct, tx, ins] = await Promise.all([
+        api.getAccount(id),
+        api.transactions(id, filters),
+        api.insights(id),
+      ]);
       setAccount(acct);
       setTxns(tx);
+      setInsights(ins);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load account');
     } finally {
@@ -33,6 +55,18 @@ export default function AccountPage() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Re-query the ledger when statement filters change (debounced; skips mount).
+  const didMount = useRef(false);
+  useEffect(() => {
+    if (!didMount.current) {
+      didMount.current = true;
+      return;
+    }
+    const t = setTimeout(loadTxns, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.start, filters.end, filters.q]);
 
   async function move(kind: 'deposit' | 'withdraw') {
     setError(null);
@@ -47,6 +81,50 @@ export default function AccountPage() {
       setError(e instanceof ApiError ? e.message : (e as Error).message);
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function runAction(fn: () => Promise<unknown>) {
+    setError(null);
+    setActionBusy(true);
+    try {
+      await fn();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  function saveRename() {
+    const name = nameDraft.trim();
+    if (!name) return;
+    runAction(() => api.updateAccount(id, { holder_name: name })).then(() => setRenaming(false));
+  }
+
+  function closeAccount() {
+    if (!window.confirm('Close this account? This cannot be undone.')) return;
+    runAction(() => api.updateAccount(id, { status: 'closed' }));
+  }
+
+  async function exportCsv() {
+    setError(null);
+    setExporting(true);
+    try {
+      const blob = await api.statementCsv(id, filters);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `statement-${id.slice(0, 8)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not export statement');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -104,64 +182,209 @@ export default function AccountPage() {
         </p>
       </section>
 
-      {/* Move money */}
-      <section className="card p-5 sm:p-6">
-        <h2 className="font-semibold text-slate-900 dark:text-white">Move money</h2>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="flex-1">
-            <span className="label">Amount ({account.currency})</span>
-            <input
-              className="input"
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-            />
-          </label>
-          <div className="flex gap-3">
-            <button
-              className="btn-success flex-1 sm:flex-none"
-              disabled={busy !== null}
-              onClick={() => move('deposit')}
-            >
-              {busy === 'deposit' ? <Spinner /> : <ArrowDownLeft width={18} height={18} />}
-              Deposit
-            </button>
-            <button
-              className="btn-ghost flex-1 sm:flex-none"
-              disabled={busy !== null}
-              onClick={() => move('withdraw')}
-            >
-              {busy === 'withdraw' ? <Spinner /> : <ArrowUpRight width={18} height={18} />}
-              Withdraw
-            </button>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {PRESETS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setAmount(String(p))}
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10"
-            >
-              +{p}
-            </button>
-          ))}
-        </div>
-        {error && (
-          <div className="mt-3">
-            <Notice tone="error">{error}</Notice>
-          </div>
-        )}
-      </section>
+      {error && <Notice tone="error">{error}</Notice>}
+
+      {account.status === 'closed' ? (
+        <Notice tone="error">This account is closed and can no longer transact.</Notice>
+      ) : (
+        <>
+          {/* Move money */}
+          <section className="card p-5 sm:p-6">
+            <h2 className="font-semibold text-slate-900 dark:text-white">Move money</h2>
+            {account.status === 'frozen' && (
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                This account is frozen. Unfreeze it below to deposit or withdraw.
+              </p>
+            )}
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className="flex-1">
+                <span className="label">Amount ({account.currency})</span>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  disabled={account.status !== 'active'}
+                />
+              </label>
+              <div className="flex gap-3">
+                <button
+                  className="btn-success flex-1 sm:flex-none"
+                  disabled={busy !== null || account.status !== 'active'}
+                  onClick={() => move('deposit')}
+                >
+                  {busy === 'deposit' ? <Spinner /> : <ArrowDownLeft width={18} height={18} />}
+                  Deposit
+                </button>
+                <button
+                  className="btn-ghost flex-1 sm:flex-none"
+                  disabled={busy !== null || account.status !== 'active'}
+                  onClick={() => move('withdraw')}
+                >
+                  {busy === 'withdraw' ? <Spinner /> : <ArrowUpRight width={18} height={18} />}
+                  Withdraw
+                </button>
+              </div>
+            </div>
+            {account.status === 'active' && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {PRESETS.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setAmount(String(p))}
+                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10"
+                  >
+                    +{p}
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Manage account */}
+          <section className="card p-5 sm:p-6">
+            <h2 className="font-semibold text-slate-900 dark:text-white">Manage account</h2>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+              {renaming ? (
+                <>
+                  <label className="flex-1">
+                    <span className="label">Account name</span>
+                    <input
+                      className="input"
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      autoFocus
+                    />
+                  </label>
+                  <div className="flex gap-2">
+                    <button className="btn-primary" disabled={actionBusy} onClick={saveRename}>
+                      {actionBusy && <Spinner />}
+                      Save
+                    </button>
+                    <button className="btn-ghost" type="button" onClick={() => setRenaming(false)}>
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex w-full items-center justify-between gap-3">
+                  <div>
+                    <p className="label mb-0">Account name</p>
+                    <p className="font-medium text-slate-900 dark:text-white">
+                      {account.holder_name}
+                    </p>
+                  </div>
+                  <button
+                    className="btn-ghost"
+                    type="button"
+                    onClick={() => {
+                      setNameDraft(account.holder_name);
+                      setRenaming(true);
+                    }}
+                  >
+                    Rename
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+              {account.status === 'active' ? (
+                <button
+                  className="btn-ghost"
+                  disabled={actionBusy}
+                  onClick={() => runAction(() => api.updateAccount(id, { status: 'frozen' }))}
+                >
+                  Freeze account
+                </button>
+              ) : (
+                <button
+                  className="btn-ghost"
+                  disabled={actionBusy}
+                  onClick={() => runAction(() => api.updateAccount(id, { status: 'active' }))}
+                >
+                  Unfreeze account
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={closeAccount}
+                disabled={actionBusy || account.balance_cents !== 0}
+                title={account.balance_cents !== 0 ? 'Balance must be zero to close' : undefined}
+                className="btn bg-rose-50 text-rose-600 hover:bg-rose-100 focus-visible:ring-rose-400/30 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20"
+              >
+                Close account
+              </button>
+            </div>
+            {account.balance_cents !== 0 && (
+              <p className="mt-2 text-xs text-slate-400">
+                Withdraw or transfer the remaining balance to close this account.
+              </p>
+            )}
+          </section>
+        </>
+      )}
+
+      {insights && <InsightsPanel insights={insights} />}
 
       {/* Transactions */}
       <section>
-        <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">Transactions</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-semibold text-slate-900 dark:text-white">Transactions</h2>
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={exporting || txns.length === 0}
+            onClick={exportCsv}
+          >
+            {exporting ? <Spinner /> : <DownloadIcon width={16} height={16} />}
+            Export CSV
+          </button>
+        </div>
+
+        <div className="card mb-3 flex flex-col gap-3 p-3 sm:flex-row sm:items-end">
+          <label className="flex-1">
+            <span className="label">Search</span>
+            <input
+              className="input"
+              placeholder="Reference or type…"
+              value={filters.q}
+              onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+            />
+          </label>
+          <label>
+            <span className="label">From</span>
+            <input
+              className="input"
+              type="date"
+              value={filters.start}
+              onChange={(e) => setFilters((f) => ({ ...f, start: e.target.value }))}
+            />
+          </label>
+          <label>
+            <span className="label">To</span>
+            <input
+              className="input"
+              type="date"
+              value={filters.end}
+              onChange={(e) => setFilters((f) => ({ ...f, end: e.target.value }))}
+            />
+          </label>
+          {hasFilters && (
+            <button className="btn-ghost" type="button" onClick={() => setFilters(EMPTY_FILTERS)}>
+              Clear
+            </button>
+          )}
+        </div>
+
         {txns.length === 0 ? (
           <div className="card px-6 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-            No transactions yet. Make a deposit to see activity here.
+            {hasFilters
+              ? 'No transactions match your filters.'
+              : 'No transactions yet. Make a deposit to see activity here.'}
           </div>
         ) : (
           <ul className="card divide-y divide-slate-100 overflow-hidden dark:divide-slate-800">
