@@ -2,10 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  font-family: 'Inter', system-ui, sans-serif;
+@layer base {
+  :root {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100;
+  }
+  ::selection {
+    @apply bg-brand-500/25;
+  }
 }
 
-body {
-  @apply bg-slate-50 text-slate-800 antialiased;
+@layer components {
+  /* Surface */
+  .card {
+    @apply rounded-2xl border border-slate-200/80 bg-white shadow-card
+           dark:border-slate-800 dark:bg-slate-900/70;
+  }
+
+  /* Forms */
+  .label {
+    @apply block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5;
+  }
+  .input {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-800
+           shadow-sm outline-none transition placeholder:text-slate-400
+           focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15
+           dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold
+           transition active:scale-[.97] disabled:pointer-events-none disabled:opacity-50
+           focus-visible:outline-none focus-visible:ring-4;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white shadow-sm hover:bg-brand-500 focus-visible:ring-brand-500/30;
+  }
+  .btn-success {
+    @apply btn bg-emerald-600 text-white shadow-sm hover:bg-emerald-500 focus-visible:ring-emerald-500/30;
+  }
+  .btn-ghost {
+    @apply btn bg-slate-100 text-slate-700 hover:bg-slate-200 focus-visible:ring-slate-400/30
+           dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+
+  /* Loading skeleton with a shimmer sweep */
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-slate-200/70 dark:bg-slate-800;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full;
+    background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    animation: shimmer 1.5s infinite;
+  }
+  .dark .skeleton::after {
+    background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

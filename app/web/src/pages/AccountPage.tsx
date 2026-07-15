@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, api } from '../api/client';
-import { formatMoney, toCents } from '../lib/money';
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight } from '../components/icons';
+import { Notice, Spinner, StatusBadge, TxnIcon, txnMeta } from '../components/ui';
+import { formatMoney, relativeTime, toCents } from '../lib/money';
 import type { Account, Transaction } from '../types';
+
+const PRESETS = [10, 50, 100, 500];
 
 export default function AccountPage() {
   const { id = '' } = useParams();
@@ -10,7 +14,8 @@ export default function AccountPage() {
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [amount, setAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<'deposit' | 'withdraw' | null>(null);
 
   async function refresh() {
     try {
@@ -19,6 +24,8 @@ export default function AccountPage() {
       setTxns(tx);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load account');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -29,7 +36,7 @@ export default function AccountPage() {
 
   async function move(kind: 'deposit' | 'withdraw') {
     setError(null);
-    setBusy(true);
+    setBusy(kind);
     try {
       const cents = toCents(amount);
       if (kind === 'deposit') await api.deposit(id, cents);
@@ -39,93 +46,158 @@ export default function AccountPage() {
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error).message);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="animate-fade-in space-y-6">
+        <div className="skeleton h-4 w-24" />
+        <div className="skeleton h-44 w-full rounded-2xl" />
+        <div className="skeleton h-32 w-full rounded-2xl" />
+      </div>
+    );
   }
 
   if (!account) {
     return (
-      <div>
-        {error ? <p className="text-red-600">{error}</p> : <p className="text-slate-500">Loading…</p>}
-        <Link to="/" className="text-sm text-slate-500 underline">
-          Back to accounts
+      <div className="space-y-4">
+        {error && <Notice tone="error">{error}</Notice>}
+        <Link to="/" className="btn-ghost w-max">
+          <ArrowLeft width={18} height={18} /> Back to accounts
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <Link to="/" className="text-sm text-slate-500 underline">
-        ← Accounts
+    <div className="animate-slide-up space-y-6">
+      <Link
+        to="/"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
+      >
+        <ArrowLeft width={16} height={16} /> Accounts
       </Link>
 
-      <section className="bg-white rounded-lg border border-slate-200 p-5">
-        <div className="flex justify-between items-baseline">
-          <h2 className="font-semibold">{account.holder_name}</h2>
-          <span className="text-xs uppercase text-slate-400">{account.status}</span>
+      {/* Balance card */}
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-brand-900 p-6 text-white shadow-glow sm:p-8">
+        <div
+          aria-hidden
+          className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-500/30 blur-3xl"
+        />
+        <div className="relative flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm text-white/60">Account holder</p>
+            <h1 className="mt-0.5 text-xl font-semibold">{account.holder_name}</h1>
+          </div>
+          <StatusBadge status={account.status} />
         </div>
-        <div className="text-3xl font-semibold mt-2">
-          {formatMoney(account.balance_cents, account.currency)}
+        <div className="relative mt-6">
+          <p className="text-sm text-white/60">Available balance</p>
+          <p className="mt-1 text-4xl font-bold tracking-tight sm:text-5xl">
+            {formatMoney(account.balance_cents, account.currency)}
+          </p>
         </div>
-
-        <div className="flex flex-wrap gap-3 items-end mt-4">
-          <input
-            className="border rounded-md px-3 py-2 w-40"
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
-          />
-          <button
-            disabled={busy}
-            onClick={() => move('deposit')}
-            className="bg-emerald-600 text-white rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50"
-          >
-            Deposit
-          </button>
-          <button
-            disabled={busy}
-            onClick={() => move('withdraw')}
-            className="bg-slate-900 text-white rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50"
-          >
-            Withdraw
-          </button>
-        </div>
-        {error && <p className="text-red-600 text-sm mt-3">{error}</p>}
+        <p className="relative mt-6 font-mono text-xs text-white/50">
+          {account.currency} · {account.id}
+        </p>
       </section>
 
+      {/* Move money */}
+      <section className="card p-5 sm:p-6">
+        <h2 className="font-semibold text-slate-900 dark:text-white">Move money</h2>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="flex-1">
+            <span className="label">Amount ({account.currency})</span>
+            <input
+              className="input"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+            />
+          </label>
+          <div className="flex gap-3">
+            <button
+              className="btn-success flex-1 sm:flex-none"
+              disabled={busy !== null}
+              onClick={() => move('deposit')}
+            >
+              {busy === 'deposit' ? <Spinner /> : <ArrowDownLeft width={18} height={18} />}
+              Deposit
+            </button>
+            <button
+              className="btn-ghost flex-1 sm:flex-none"
+              disabled={busy !== null}
+              onClick={() => move('withdraw')}
+            >
+              {busy === 'withdraw' ? <Spinner /> : <ArrowUpRight width={18} height={18} />}
+              Withdraw
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setAmount(String(p))}
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10"
+            >
+              +{p}
+            </button>
+          ))}
+        </div>
+        {error && (
+          <div className="mt-3">
+            <Notice tone="error">{error}</Notice>
+          </div>
+        )}
+      </section>
+
+      {/* Transactions */}
       <section>
-        <h3 className="font-semibold mb-3">Transactions</h3>
+        <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">Transactions</h2>
         {txns.length === 0 ? (
-          <p className="text-slate-500">No transactions yet.</p>
+          <div className="card px-6 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+            No transactions yet. Make a deposit to see activity here.
+          </div>
         ) : (
-          <table className="w-full text-sm bg-white rounded-lg border border-slate-200 overflow-hidden">
-            <thead className="bg-slate-100 text-slate-500 text-left">
-              <tr>
-                <th className="px-4 py-2">Type</th>
-                <th className="px-4 py-2 text-right">Amount</th>
-                <th className="px-4 py-2 text-right">Balance</th>
-                <th className="px-4 py-2">When</th>
-              </tr>
-            </thead>
-            <tbody>
-              {txns.map((t) => (
-                <tr key={t.id} className="border-t border-slate-100">
-                  <td className="px-4 py-2 capitalize">{t.type.replace('_', ' ')}</td>
-                  <td className="px-4 py-2 text-right font-mono">
-                    {formatMoney(t.amount_cents, account.currency)}
-                  </td>
-                  <td className="px-4 py-2 text-right font-mono">
-                    {formatMoney(t.balance_after_cents, account.currency)}
-                  </td>
-                  <td className="px-4 py-2 text-slate-500">
-                    {new Date(t.created_at).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ul className="card divide-y divide-slate-100 overflow-hidden dark:divide-slate-800">
+            {txns.map((t) => {
+              const { positive, label } = txnMeta(t.type);
+              return (
+                <li
+                  key={t.id}
+                  className="flex items-center gap-3 px-4 py-3.5 transition hover:bg-slate-50 dark:hover:bg-slate-800/40 sm:px-5"
+                >
+                  <TxnIcon type={t.type} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium capitalize text-slate-900 dark:text-white">{label}</p>
+                    <p className="truncate text-xs text-slate-400">
+                      {t.reference || relativeTime(t.created_at)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={`font-mono font-semibold ${
+                        positive
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-rose-600 dark:text-rose-400'
+                      }`}
+                    >
+                      {positive ? '+' : '−'}
+                      {formatMoney(t.amount_cents, account.currency)}
+                    </p>
+                    <p className="mt-0.5 font-mono text-xs text-slate-400">
+                      {formatMoney(t.balance_after_cents, account.currency)}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
     </div>
