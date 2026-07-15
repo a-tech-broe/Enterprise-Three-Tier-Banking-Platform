@@ -45,11 +45,17 @@ resource "aws_launch_template" "this" {
     }
   }
 
-  # Require IMDSv2 to mitigate SSRF-based credential theft.
+  # Require IMDSv2 to mitigate SSRF-based credential theft. Hop limit is 2 (not 1)
+  # because the banking-api runs as a Docker container on the bridge network,
+  # which adds one network hop; at hop limit 1 the container cannot reach IMDS to
+  # obtain instance-role credentials, so boto3 (Secrets Manager, etc.) fails.
+  # Hop limit 2 is still safe: IMDSv2 tokens remain required and are not routable
+  # off the instance.
+  # checkov:skip=CKV_AWS_341:Containers on the docker bridge need hop limit 2 for IMDSv2; tokens still required.
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
-    http_put_response_hop_limit = 1
+    http_put_response_hop_limit = 2
     instance_metadata_tags      = "enabled"
   }
 
