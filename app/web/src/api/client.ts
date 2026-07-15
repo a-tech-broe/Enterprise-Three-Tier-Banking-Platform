@@ -1,4 +1,11 @@
-import type { Account, AccountStatus, AuthResponse, Transaction, User } from '../types';
+import type {
+  Account,
+  AccountStatus,
+  AuthResponse,
+  Insights,
+  Transaction,
+  User,
+} from '../types';
 
 // Base URL for the banking API. Empty (default) means same-origin / dev proxy;
 // set VITE_API_URL at build time to point the SPA at the ALB/API host.
@@ -106,6 +113,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ amount_cents, reference }),
     }),
+  insights: (id: string) => request<Insights>(`/api/v1/accounts/${id}/insights`),
   transactions: (id: string, filters?: TxnFilters) =>
     request<Transaction[]>(`/api/v1/accounts/${id}/transactions${queryString(filters)}`),
   statementCsv: async (id: string, filters?: TxnFilters): Promise<Blob> => {

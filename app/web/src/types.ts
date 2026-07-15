@@ -35,3 +35,24 @@ export interface Transaction {
   reference: string | null;
   created_at: string;
 }
+
+export interface MonthlyPoint {
+  month: string; // "YYYY-MM"
+  in_cents: number;
+  out_cents: number;
+}
+
+export interface TypeBreakdown {
+  type: TxnType;
+  total_cents: number;
+  count: number;
+}
+
+export interface Insights {
+  currency: string;
+  total_in_cents: number;
+  total_out_cents: number;
+  net_cents: number;
+  monthly: MonthlyPoint[];
+  by_type: TypeBreakdown[];
+}

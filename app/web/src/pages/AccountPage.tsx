@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, api } from '../api/client';
 import { ArrowDownLeft, ArrowLeft, ArrowUpRight, DownloadIcon } from '../components/icons';
+import InsightsPanel from '../components/InsightsPanel';
 import { Notice, Spinner, StatusBadge, TxnIcon, txnMeta } from '../components/ui';
 import { formatMoney, relativeTime, toCents } from '../lib/money';
-import type { Account, Transaction } from '../types';
+import type { Account, Insights, Transaction } from '../types';
 
 const PRESETS = [10, 50, 100, 500];
 const EMPTY_FILTERS = { start: '', end: '', q: '' };
@@ -22,6 +23,7 @@ export default function AccountPage() {
   const [nameDraft, setNameDraft] = useState('');
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [exporting, setExporting] = useState(false);
+  const [insights, setInsights] = useState<Insights | null>(null);
   const hasFilters = Boolean(filters.q || filters.start || filters.end);
 
   async function loadTxns() {
@@ -34,9 +36,14 @@ export default function AccountPage() {
 
   async function refresh() {
     try {
-      const [acct, tx] = await Promise.all([api.getAccount(id), api.transactions(id, filters)]);
+      const [acct, tx, ins] = await Promise.all([
+        api.getAccount(id),
+        api.transactions(id, filters),
+        api.insights(id),
+      ]);
       setAccount(acct);
       setTxns(tx);
+      setInsights(ins);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load account');
     } finally {
@@ -320,6 +327,8 @@ export default function AccountPage() {
           </section>
         </>
       )}
+
+      {insights && <InsightsPanel insights={insights} />}
 
       {/* Transactions */}
       <section>

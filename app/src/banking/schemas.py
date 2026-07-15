@@ -87,6 +87,27 @@ class TransactionOut(BaseModel):
     created_at: dt.datetime
 
 
+class MonthlyPoint(BaseModel):
+    month: str  # "YYYY-MM"
+    in_cents: int
+    out_cents: int
+
+
+class TypeBreakdown(BaseModel):
+    type: TxnType
+    total_cents: int
+    count: int
+
+
+class InsightsOut(BaseModel):
+    currency: str
+    total_in_cents: int
+    total_out_cents: int
+    net_cents: int
+    monthly: list[MonthlyPoint]
+    by_type: list[TypeBreakdown]
+
+
 class HealthOut(BaseModel):
     status: str
     service: str

@@ -16,6 +16,7 @@ from ..schemas import (
     AccountCreate,
     AccountOut,
     AccountUpdate,
+    InsightsOut,
     MoneyOp,
     TransactionOut,
 )
@@ -104,6 +105,18 @@ def list_transactions(
 ) -> list[TransactionOut]:
     txns = services.list_transactions(db, account_id, user.id, limit, start, end, q)
     return [TransactionOut.model_validate(t) for t in txns]
+
+
+@router.get("/{account_id}/insights", response_model=InsightsOut)
+def insights(
+    account_id: str,
+    db: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+    months: int = Query(default=6, ge=1, le=24),
+) -> InsightsOut:
+    return InsightsOut.model_validate(
+        services.account_insights(db, account_id, user.id, months)
+    )
 
 
 @router.get("/{account_id}/statement.csv")

@@ -124,6 +124,59 @@ def list_transactions(
     return list(db.scalars(stmt))
 
 
+def account_insights(db: Session, account_id: str, owner_id: str, months: int = 6) -> dict:
+    """Per-account spending insights: monthly in/out plus a by-type breakdown.
+
+    Scoped to one account so everything is a single currency (aggregating across
+    currencies would be meaningless). Aggregated in Python to stay portable
+    across SQLite (tests) and PostgreSQL.
+    """
+    account = get_account(db, account_id, owner_id)
+    txns = list(db.scalars(select(Transaction).where(Transaction.account_id == account_id)))
+
+    inflow_types = {TxnType.deposit, TxnType.transfer_in}
+    by_type: dict[TxnType, list[int]] = {t: [0, 0] for t in TxnType}  # [total_cents, count]
+    monthly: dict[str, list[int]] = {}  # "YYYY-MM" -> [in, out]
+    total_in = total_out = 0
+
+    for t in txns:
+        by_type[t.type][0] += t.amount_cents
+        by_type[t.type][1] += 1
+        bucket = monthly.setdefault(t.created_at.strftime("%Y-%m"), [0, 0])
+        if t.type in inflow_types:
+            total_in += t.amount_cents
+            bucket[0] += t.amount_cents
+        else:
+            total_out += t.amount_cents
+            bucket[1] += t.amount_cents
+
+    # Continuous last-N-months series (fill empty months with zeros).
+    today = dt.date.today()
+    year, month = today.year, today.month
+    keys: list[str] = []
+    for _ in range(months):
+        keys.append(f"{year:04d}-{month:02d}")
+        month -= 1
+        if month == 0:
+            month, year = 12, year - 1
+    keys.reverse()
+
+    series = [
+        {"month": k, "in_cents": monthly.get(k, [0, 0])[0], "out_cents": monthly.get(k, [0, 0])[1]}
+        for k in keys
+    ]
+    return {
+        "currency": account.currency,
+        "total_in_cents": total_in,
+        "total_out_cents": total_out,
+        "net_cents": total_in - total_out,
+        "monthly": series,
+        "by_type": [
+            {"type": t, "total_cents": by_type[t][0], "count": by_type[t][1]} for t in TxnType
+        ],
+    }
+
+
 def _existing_by_key(db: Session, key: str | None) -> Transaction | None:
     if not key:
         return None
