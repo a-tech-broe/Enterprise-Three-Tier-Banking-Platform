@@ -147,6 +147,7 @@ module "iam" {
     aws_ssm_parameter.app_image.arn,
     aws_ssm_parameter.jwt_secret.arn,
   ]
+  ses_identity_arns = local.email_enabled ? [aws_sesv2_email_identity.domain[0].arn] : []
 
   tags = local.common_tags
 }
@@ -312,6 +313,31 @@ locals {
   # Known at plan time (both inputs are static), unlike certificate_arn which is
   # a computed ACM ARN when enable_dns = true.
   enable_https = var.enable_dns || var.certificate_arn != ""
+
+  # Email is only possible with a domain to verify. Sender + public link base.
+  email_enabled = var.enable_dns && var.enable_email
+  ses_from      = local.email_enabled ? "no-reply@${var.zone_name}" : ""
+  app_base_url  = var.enable_dns ? "https://${var.record_name}" : ""
+}
+
+# ---------------------------------------------------------------------------
+# Transactional email (Amazon SES) — verified via Easy DKIM in the hosted zone.
+# New SES accounts start in the sandbox (verified recipients only); request
+# production access to email arbitrary users.
+# ---------------------------------------------------------------------------
+resource "aws_sesv2_email_identity" "domain" {
+  count          = local.email_enabled ? 1 : 0
+  email_identity = var.zone_name
+  tags           = local.common_tags
+}
+
+resource "aws_route53_record" "ses_dkim" {
+  count   = local.email_enabled ? 3 : 0
+  zone_id = module.dns[0].zone_id
+  name    = "${aws_sesv2_email_identity.domain[0].dkim_signing_attributes[0].tokens[count.index]}._domainkey.${var.zone_name}"
+  type    = "CNAME"
+  ttl     = 300
+  records = ["${aws_sesv2_email_identity.domain[0].dkim_signing_attributes[0].tokens[count.index]}.dkim.amazonses.com"]
 }
 
 # Alias record -> ALB. Created here (after the ALB) rather than inside the dns
@@ -361,16 +387,20 @@ locals {
   # nginx that answers the ALB health check on first boot, so ASG scale-out and
   # instance refresh always yield healthy instances. Ansible converges the rest.
   user_data = templatefile("${path.module}/templates/user-data.sh.tftpl", {
-    name_prefix      = local.name_prefix
-    environment      = var.environment
-    aws_region       = var.aws_region
-    app_port         = var.app_port
-    upstream_port    = var.app_upstream_port
-    health_path      = var.health_check_path
-    app_image_param  = aws_ssm_parameter.app_image.name
-    jwt_secret_param = aws_ssm_parameter.jwt_secret.name
-    db_secret_arn    = module.rds.secret_arn
-    db_name          = var.db_name
+    name_prefix        = local.name_prefix
+    environment        = var.environment
+    aws_region         = var.aws_region
+    app_port           = var.app_port
+    upstream_port      = var.app_upstream_port
+    health_path        = var.health_check_path
+    app_image_param    = aws_ssm_parameter.app_image.name
+    jwt_secret_param   = aws_ssm_parameter.jwt_secret.name
+    db_secret_arn      = module.rds.secret_arn
+    db_name            = var.db_name
+    admin_emails       = var.admin_emails
+    expose_reset_token = var.expose_reset_token ? "true" : "false"
+    app_base_url       = local.app_base_url
+    email_from         = local.ses_from
   })
 }
 

@@ -99,10 +99,20 @@ data "aws_iam_policy_document" "app" {
       resources = var.ssm_parameter_arns
     }
   }
+
+  dynamic "statement" {
+    for_each = length(var.ses_identity_arns) > 0 ? [1] : []
+    content {
+      sid       = "SendTransactionalEmail"
+      effect    = "Allow"
+      actions   = ["ses:SendEmail", "ses:SendRawEmail"]
+      resources = var.ses_identity_arns
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "app" {
-  count  = length(var.secret_arns) + length(var.kms_key_arns) + length(var.artifact_bucket_arns) + length(var.ssm_bucket_arns) + length(var.ssm_parameter_arns) > 0 ? 1 : 0
+  count  = length(var.secret_arns) + length(var.kms_key_arns) + length(var.artifact_bucket_arns) + length(var.ssm_bucket_arns) + length(var.ssm_parameter_arns) + length(var.ses_identity_arns) > 0 ? 1 : 0
   name   = "${var.name}-app"
   role   = aws_iam_role.instance.id
   policy = data.aws_iam_policy_document.app.json

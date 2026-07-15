@@ -46,9 +46,14 @@ class Settings(BaseSettings):
     admin_emails: str = Field(default="", alias="ADMIN_EMAILS")
 
     # Demo convenience: return the password-reset token in the forgot-password
-    # response (since there's no email delivery). Disable in real deployments and
-    # email the reset link instead.
+    # response. Once email delivery is live and out of the SES sandbox, set this
+    # false so the token is only ever emailed.
     expose_reset_token: bool = Field(default=True, alias="EXPOSE_RESET_TOKEN")
+
+    # Email delivery (Amazon SES). email_from empty => email disabled. app_base_url
+    # is the public origin used to build links in emails (e.g. https://skybroe.com).
+    email_from: str = Field(default="", alias="EMAIL_FROM")
+    app_base_url: str = Field(default="", alias="APP_BASE_URL")
 
     def admin_email_list(self) -> list[str]:
         return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]

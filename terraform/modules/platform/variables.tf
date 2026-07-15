@@ -186,6 +186,24 @@ variable "certificate_arn" {
   default     = ""
 }
 
+variable "admin_emails" {
+  description = "Comma-separated emails granted back-office (admin) access, passed to the app as ADMIN_EMAILS."
+  type        = string
+  default     = ""
+}
+
+variable "enable_email" {
+  description = "Send transactional email (password reset) via Amazon SES. Requires enable_dns (a domain to verify)."
+  type        = bool
+  default     = false
+}
+
+variable "expose_reset_token" {
+  description = "Return the password-reset token in the API response (demo). Set false once email delivery is live and out of the SES sandbox."
+  type        = bool
+  default     = true
+}
+
 # --- Observability ----------------------------------------------------------
 variable "alarm_email_endpoints" {
   description = "Emails subscribed to the alarm SNS topic."

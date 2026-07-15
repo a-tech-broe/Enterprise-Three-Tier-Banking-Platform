@@ -336,7 +336,9 @@ def list_all_accounts(db: Session, limit: int = 500, offset: int = 0) -> list[Ac
     return list(db.scalars(stmt))
 
 
-def list_account_transactions_any(db: Session, account_id: str, limit: int = 200) -> list[Transaction]:
+def list_account_transactions_any(
+    db: Session, account_id: str, limit: int = 200
+) -> list[Transaction]:
     """Transactions for any account, without an ownership check (admin only)."""
     stmt = (
         select(Transaction)

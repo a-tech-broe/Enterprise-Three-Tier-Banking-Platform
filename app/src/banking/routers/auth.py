@@ -4,6 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from .. import email as email_service
 from .. import errors, services
 from ..config import get_settings
 from ..database import get_session
@@ -59,9 +60,17 @@ def forgot_password(
     user = services.get_user_by_email(db, payload.email)
     if user is None:
         return ForgotPasswordResponse(message=generic)
+
+    settings = get_settings()
     token = create_reset_token(user.id)
-    # In production this is emailed; for the demo we optionally return it.
-    exposed = token if get_settings().expose_reset_token else None
+
+    # Email the link when a base URL + sender are configured (best-effort).
+    if settings.app_base_url:
+        link = f"{settings.app_base_url.rstrip('/')}/reset-password?token={token}"
+        email_service.send_reset_email(user.email, link)
+
+    # Demo convenience: also return the token unless disabled.
+    exposed = token if settings.expose_reset_token else None
     return ForgotPasswordResponse(message=generic, reset_token=exposed)
 
 

@@ -92,6 +92,10 @@ docker run -d --name banking-app --restart unless-stopped \
   -e AWS_REGION="$REGION" \
   -e DB_SECRET_ARN="${db_secret_arn}" \
   -e DB_NAME="${db_name}" \
+  -e ADMIN_EMAILS="${admin_emails}" \
+  -e EXPOSE_RESET_TOKEN="${expose_reset_token}" \
+  -e APP_BASE_URL="${app_base_url}" \
+  -e EMAIL_FROM="${email_from}" \
   "$${JWT_ARG[@]}" \
   "$IMAGE"
 RUNAPP

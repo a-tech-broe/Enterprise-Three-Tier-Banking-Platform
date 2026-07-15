@@ -53,6 +53,15 @@ module "platform" {
   zone_name                    = "skybroe.com"
   record_name                  = "skybroe.com"
 
+  # Back-office access: these emails get admin (comma-separated). Edit as needed.
+  admin_emails = "jen4rill@gmail.com"
+
+  # Transactional email via SES (password-reset links). Verifies skybroe.com with
+  # Easy DKIM in the hosted zone and lets the app send from no-reply@skybroe.com.
+  # New SES accounts are sandboxed — request production access to email arbitrary
+  # users, then set expose_reset_token = false so the token is only ever emailed.
+  enable_email = true
+
   # Observability
   alarm_email_endpoints = var.alarm_email_endpoints
   log_retention_days    = 30
