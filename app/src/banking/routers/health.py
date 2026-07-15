@@ -1,9 +1,8 @@
 """Liveness and readiness probes (used by nginx/ALB and Kubernetes-style checks)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Response, status
 from sqlalchemy import text
-from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..database import get_session
@@ -19,10 +18,17 @@ def health() -> HealthOut:
 
 
 @router.get("/health/ready", response_model=ReadyOut)
-def ready(response: Response, db: Session = Depends(get_session)) -> ReadyOut:
+def ready(response: Response) -> ReadyOut:
+    # Obtain the session inside the try (not via Depends) so a failure to build
+    # the engine — e.g. credentials/secret unavailable — degrades to 503 rather
+    # than surfacing as an unhandled 500.
+    gen = get_session()
     try:
+        db = next(gen)
         db.execute(text("SELECT 1"))
         return ReadyOut(status="ok", database="up")
     except Exception:  # noqa: BLE001 - readiness must never raise
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return ReadyOut(status="degraded", database="down")
+    finally:
+        gen.close()
