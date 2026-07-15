@@ -60,23 +60,20 @@ resource "aws_lb_listener" "http" {
   port              = 80
   protocol          = "HTTP"
 
-  dynamic "default_action" {
-    for_each = var.enable_https ? [1] : []
-    content {
-      type = "redirect"
-      redirect {
+  # One default_action: redirect to HTTPS when TLS is on (target_group_arn must
+  # be null then, or the provider warns about an invalid attribute combination),
+  # otherwise forward straight to the app.
+  default_action {
+    type             = var.enable_https ? "redirect" : "forward"
+    target_group_arn = var.enable_https ? null : aws_lb_target_group.app.arn
+
+    dynamic "redirect" {
+      for_each = var.enable_https ? [1] : []
+      content {
         port        = "443"
         protocol    = "HTTPS"
         status_code = "HTTP_301"
       }
-    }
-  }
-
-  dynamic "default_action" {
-    for_each = var.enable_https ? [] : [1]
-    content {
-      type             = "forward"
-      target_group_arn = aws_lb_target_group.app.arn
     }
   }
 
