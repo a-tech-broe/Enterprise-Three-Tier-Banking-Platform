@@ -17,7 +17,7 @@ def app(monkeypatch):
     # Force a clean in-memory database for each test.
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("ENVIRONMENT", "test")
-    monkeypatch.setenv("JWT_SECRET", "test-secret")
+    monkeypatch.setenv("JWT_SECRET", "test-secret-that-is-at-least-32-bytes-long")
     database.init_engine("sqlite+pysqlite:///:memory:")
     return create_app()
 
