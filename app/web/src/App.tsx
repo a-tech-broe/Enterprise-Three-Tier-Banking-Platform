@@ -23,7 +23,7 @@ export default function App() {
         </Routes>
       </main>
       <footer className="mx-auto max-w-5xl px-4 pb-10 pt-4 text-center text-xs text-slate-400 sm:px-6">
-        Banking Platform · secured with TLS · demo environment
+        Atechbroe Bank · secured with TLS · demo environment
       </footer>
     </div>
   );
