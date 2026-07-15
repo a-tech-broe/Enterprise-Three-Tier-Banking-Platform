@@ -1,20 +1,30 @@
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import NavBar from './components/NavBar';
 import AccountPage from './pages/AccountPage';
 import AccountsPage from './pages/AccountsPage';
 import TransferPage from './pages/TransferPage';
 
 export default function App() {
+  const location = useLocation();
   return (
-    <div className="min-h-screen">
+    <div className="relative min-h-screen">
+      {/* Ambient brand glow behind the page content */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-72 bg-gradient-to-b from-brand-500/10 to-transparent dark:from-brand-500/10"
+      />
       <NavBar />
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <Routes>
+      {/* key on pathname replays the entrance animation on navigation */}
+      <main key={location.pathname} className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+        <Routes location={location}>
           <Route path="/" element={<AccountsPage />} />
           <Route path="/accounts/:id" element={<AccountPage />} />
           <Route path="/transfer" element={<TransferPage />} />
         </Routes>
       </main>
+      <footer className="mx-auto max-w-5xl px-4 pb-10 pt-4 text-center text-xs text-slate-400 sm:px-6">
+        Banking Platform · secured with TLS · demo environment
+      </footer>
     </div>
   );
 }
