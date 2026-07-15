@@ -5,20 +5,20 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Banking brand: a trustworthy indigo. Referenced via `brand-*` so the
-        // whole palette can be re-skinned in one place.
+        // Atechbroe Bank brand: kiwi green, drawn from the logo. Referenced via
+        // `brand-*` so the whole palette can be re-skinned in one place.
         brand: {
-          50: '#eef2ff',
-          100: '#e0e7ff',
-          200: '#c7d2fe',
-          300: '#a5b4fc',
-          400: '#818cf8',
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
-          800: '#3730a3',
-          900: '#312e81',
-          950: '#1e1b4b',
+          50: '#f5fbe8',
+          100: '#e8f6c6',
+          200: '#d3ec96',
+          300: '#bbdf5f',
+          400: '#a1cf33',
+          500: '#84b81b',
+          600: '#659311',
+          700: '#4c7013',
+          800: '#3e5915',
+          900: '#354b17',
+          950: '#1b2a07',
         },
       },
       fontFamily: {
@@ -27,7 +27,7 @@ export default {
       },
       boxShadow: {
         card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 12px 28px -14px rgb(15 23 42 / 0.14)',
-        glow: '0 18px 48px -18px rgb(79 70 229 / 0.55)',
+        glow: '0 18px 48px -18px rgb(101 147 17 / 0.5)',
       },
       keyframes: {
         'fade-in': { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
