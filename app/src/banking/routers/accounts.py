@@ -1,7 +1,11 @@
 """Account and per-account transaction endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, status
+import csv
+import datetime as dt
+import io
+
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import services
@@ -94,6 +98,45 @@ def list_transactions(
     db: Session = Depends(get_session),
     user: User = Depends(get_current_user),
     limit: int = Query(default=100, ge=1, le=500),
+    start: dt.date | None = Query(default=None, description="Include txns on/after this date"),
+    end: dt.date | None = Query(default=None, description="Include txns on/before this date"),
+    q: str | None = Query(default=None, max_length=140, description="Search reference or type"),
 ) -> list[TransactionOut]:
-    txns = services.list_transactions(db, account_id, user.id, limit)
+    txns = services.list_transactions(db, account_id, user.id, limit, start, end, q)
     return [TransactionOut.model_validate(t) for t in txns]
+
+
+@router.get("/{account_id}/statement.csv")
+def statement_csv(
+    account_id: str,
+    db: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+    start: dt.date | None = Query(default=None),
+    end: dt.date | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=140),
+) -> Response:
+    account = services.get_account(db, account_id, user.id)
+    txns = services.list_transactions(db, account_id, user.id, 10000, start, end, q)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        ["date", "type", "amount", "currency", "balance_after", "reference", "counterparty"]
+    )
+    for t in txns:
+        writer.writerow(
+            [
+                t.created_at.isoformat(),
+                t.type.value,
+                f"{t.amount_cents / 100:.2f}",
+                account.currency,
+                f"{t.balance_after_cents / 100:.2f}",
+                t.reference or "",
+                t.counterparty_account_id or "",
+            ]
+        )
+    filename = f"statement-{account_id[:8]}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, api } from '../api/client';
-import { ArrowDownLeft, ArrowLeft, ArrowUpRight } from '../components/icons';
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, DownloadIcon } from '../components/icons';
 import { Notice, Spinner, StatusBadge, TxnIcon, txnMeta } from '../components/ui';
 import { formatMoney, relativeTime, toCents } from '../lib/money';
 import type { Account, Transaction } from '../types';
 
 const PRESETS = [10, 50, 100, 500];
+const EMPTY_FILTERS = { start: '', end: '', q: '' };
 
 export default function AccountPage() {
   const { id = '' } = useParams();
@@ -19,10 +20,21 @@ export default function AccountPage() {
   const [actionBusy, setActionBusy] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [exporting, setExporting] = useState(false);
+  const hasFilters = Boolean(filters.q || filters.start || filters.end);
+
+  async function loadTxns() {
+    try {
+      setTxns(await api.transactions(id, filters));
+    } catch {
+      /* keep the prior list if a filter query fails */
+    }
+  }
 
   async function refresh() {
     try {
-      const [acct, tx] = await Promise.all([api.getAccount(id), api.transactions(id)]);
+      const [acct, tx] = await Promise.all([api.getAccount(id), api.transactions(id, filters)]);
       setAccount(acct);
       setTxns(tx);
     } catch (e) {
@@ -36,6 +48,18 @@ export default function AccountPage() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Re-query the ledger when statement filters change (debounced; skips mount).
+  const didMount = useRef(false);
+  useEffect(() => {
+    if (!didMount.current) {
+      didMount.current = true;
+      return;
+    }
+    const t = setTimeout(loadTxns, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.start, filters.end, filters.q]);
 
   async function move(kind: 'deposit' | 'withdraw') {
     setError(null);
@@ -75,6 +99,26 @@ export default function AccountPage() {
   function closeAccount() {
     if (!window.confirm('Close this account? This cannot be undone.')) return;
     runAction(() => api.updateAccount(id, { status: 'closed' }));
+  }
+
+  async function exportCsv() {
+    setError(null);
+    setExporting(true);
+    try {
+      const blob = await api.statementCsv(id, filters);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `statement-${id.slice(0, 8)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not export statement');
+    } finally {
+      setExporting(false);
+    }
   }
 
   if (loading) {
@@ -279,10 +323,59 @@ export default function AccountPage() {
 
       {/* Transactions */}
       <section>
-        <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">Transactions</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-semibold text-slate-900 dark:text-white">Transactions</h2>
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={exporting || txns.length === 0}
+            onClick={exportCsv}
+          >
+            {exporting ? <Spinner /> : <DownloadIcon width={16} height={16} />}
+            Export CSV
+          </button>
+        </div>
+
+        <div className="card mb-3 flex flex-col gap-3 p-3 sm:flex-row sm:items-end">
+          <label className="flex-1">
+            <span className="label">Search</span>
+            <input
+              className="input"
+              placeholder="Reference or type…"
+              value={filters.q}
+              onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+            />
+          </label>
+          <label>
+            <span className="label">From</span>
+            <input
+              className="input"
+              type="date"
+              value={filters.start}
+              onChange={(e) => setFilters((f) => ({ ...f, start: e.target.value }))}
+            />
+          </label>
+          <label>
+            <span className="label">To</span>
+            <input
+              className="input"
+              type="date"
+              value={filters.end}
+              onChange={(e) => setFilters((f) => ({ ...f, end: e.target.value }))}
+            />
+          </label>
+          {hasFilters && (
+            <button className="btn-ghost" type="button" onClick={() => setFilters(EMPTY_FILTERS)}>
+              Clear
+            </button>
+          )}
+        </div>
+
         {txns.length === 0 ? (
           <div className="card px-6 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-            No transactions yet. Make a deposit to see activity here.
+            {hasFilters
+              ? 'No transactions match your filters.'
+              : 'No transactions yet. Make a deposit to see activity here.'}
           </div>
         ) : (
           <ul className="card divide-y divide-slate-100 overflow-hidden dark:divide-slate-800">

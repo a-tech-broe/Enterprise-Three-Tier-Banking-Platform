@@ -8,7 +8,9 @@ Invariants enforced here:
 """
 from __future__ import annotations
 
-from sqlalchemy import select
+import datetime as dt
+
+from sqlalchemy import String, cast, or_, select
 from sqlalchemy.orm import Session
 
 from . import errors, security
@@ -98,15 +100,27 @@ def list_accounts(
 
 
 def list_transactions(
-    db: Session, account_id: str, owner_id: str, limit: int = 100
+    db: Session,
+    account_id: str,
+    owner_id: str,
+    limit: int = 100,
+    start: dt.date | None = None,
+    end: dt.date | None = None,
+    query: str | None = None,
 ) -> list[Transaction]:
     get_account(db, account_id, owner_id)  # 404 if missing or not owned
-    stmt = (
-        select(Transaction)
-        .where(Transaction.account_id == account_id)
-        .order_by(Transaction.created_at.desc())
-        .limit(limit)
-    )
+    stmt = select(Transaction).where(Transaction.account_id == account_id)
+    if start is not None:
+        stmt = stmt.where(Transaction.created_at >= dt.datetime.combine(start, dt.time.min))
+    if end is not None:
+        stmt = stmt.where(Transaction.created_at <= dt.datetime.combine(end, dt.time.max))
+    if query:
+        like = f"%{query.strip()}%"
+        # Match the free-text reference or the transaction type (e.g. "deposit").
+        stmt = stmt.where(
+            or_(Transaction.reference.ilike(like), cast(Transaction.type, String).ilike(like))
+        )
+    stmt = stmt.order_by(Transaction.created_at.desc()).limit(limit)
     return list(db.scalars(stmt))
 
 

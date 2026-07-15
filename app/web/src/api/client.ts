@@ -15,6 +15,22 @@ export function setToken(token: string | null): void {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+export interface TxnFilters {
+  start?: string; // YYYY-MM-DD
+  end?: string; // YYYY-MM-DD
+  q?: string;
+}
+
+function queryString(filters?: TxnFilters): string {
+  if (!filters) return '';
+  const params = new URLSearchParams();
+  if (filters.start) params.set('start', filters.start);
+  if (filters.end) params.set('end', filters.end);
+  if (filters.q) params.set('q', filters.q);
+  const s = params.toString();
+  return s ? `?${s}` : '';
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -90,8 +106,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ amount_cents, reference }),
     }),
-  transactions: (id: string) =>
-    request<Transaction[]>(`/api/v1/accounts/${id}/transactions`),
+  transactions: (id: string, filters?: TxnFilters) =>
+    request<Transaction[]>(`/api/v1/accounts/${id}/transactions${queryString(filters)}`),
+  statementCsv: async (id: string, filters?: TxnFilters): Promise<Blob> => {
+    const token = getToken();
+    const resp = await fetch(`${BASE}/api/v1/accounts/${id}/statement.csv${queryString(filters)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!resp.ok) throw new ApiError(resp.status, 'error', 'Could not export statement');
+    return resp.blob();
+  },
   transfer: (
     from_account_id: string,
     to_account_id: string,
