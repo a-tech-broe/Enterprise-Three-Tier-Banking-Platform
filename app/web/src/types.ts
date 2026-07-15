@@ -1,3 +1,17 @@
+export interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'user' | 'admin';
+  created_at: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: User;
+}
+
 export type AccountStatus = 'active' | 'frozen' | 'closed';
 
 export type TxnType = 'deposit' | 'withdrawal' | 'transfer_in' | 'transfer_out';

@@ -90,3 +90,9 @@ export const MoonIcon = (p: IconProps) => (
     <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
   </svg>
 );
+
+export const LogOutIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+  </svg>
+);
