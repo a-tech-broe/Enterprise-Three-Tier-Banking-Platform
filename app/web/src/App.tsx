@@ -1,4 +1,5 @@
 import { Route, Routes, useLocation } from 'react-router-dom';
+import brandBg from './assets/brand-bg.jpg';
 import NavBar from './components/NavBar';
 import AccountPage from './pages/AccountPage';
 import AccountsPage from './pages/AccountsPage';
@@ -8,6 +9,13 @@ export default function App() {
   const location = useLocation();
   return (
     <div className="relative min-h-screen">
+      {/* Brand watermark: the Atechbroe kiwi, held to a whisper so it never
+          competes with content. A touch stronger on dark grounds to register. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center bg-fixed opacity-[0.05] dark:opacity-[0.08]"
+        style={{ backgroundImage: `url(${brandBg})` }}
+      />
       {/* Ambient brand glow behind the page content */}
       <div
         aria-hidden
@@ -23,7 +31,7 @@ export default function App() {
         </Routes>
       </main>
       <footer className="mx-auto max-w-5xl px-4 pb-10 pt-4 text-center text-xs text-slate-400 sm:px-6">
-        Banking Platform · secured with TLS · demo environment
+        Atechbroe Bank · secured with TLS · demo environment
       </footer>
     </div>
   );

@@ -65,7 +65,7 @@ export default function AccountsPage() {
 
       {/* Summary: balance hero + stat cards */}
       <section className="grid gap-4 md:grid-cols-3">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-600 via-brand-600 to-violet-600 p-6 text-white shadow-glow md:col-span-2">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-lime-600 via-green-700 to-green-900 p-6 text-white shadow-glow md:col-span-2">
           <WalletIcon
             width={140}
             height={140}

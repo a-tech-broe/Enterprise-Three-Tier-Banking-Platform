@@ -20,7 +20,7 @@ export default function NavBar() {
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-600 text-white shadow-glow">
             <BankIcon width={20} height={20} />
           </span>
-          <span className="hidden text-slate-900 dark:text-white sm:inline">Banking Platform</span>
+          <span className="hidden text-slate-900 dark:text-white sm:inline">Atechbroe Bank</span>
         </NavLink>
 
         <NavLink to="/" end className={linkClass}>

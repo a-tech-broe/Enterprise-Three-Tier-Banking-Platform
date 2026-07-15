@@ -83,9 +83,9 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
-        title="Banking Platform API",
+        title="Atechbroe Bank API",
         version="1.0.0",
-        description="Accounts, transactions, and transfers for the three-tier banking platform.",
+        description="Accounts, transactions, and transfers for Atechbroe Bank.",
         lifespan=lifespan,
     )
 
