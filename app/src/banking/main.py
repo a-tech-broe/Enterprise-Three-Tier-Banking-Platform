@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from . import errors
 from .config import get_settings
 from .database import create_all, init_engine
-from .routers import accounts, health, transfers
+from .routers import accounts, auth, health, transfers
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("banking")
@@ -104,6 +104,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(health.router)
+    app.include_router(auth.router)
     app.include_router(accounts.router)
     app.include_router(transfers.router)
 

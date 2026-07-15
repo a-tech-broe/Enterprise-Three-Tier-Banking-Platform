@@ -11,32 +11,75 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import errors
-from .models import Account, AccountStatus, Transaction, TxnType
+from . import errors, security
+from .models import Account, AccountStatus, Transaction, TxnType, User
 
 
-def create_account(db: Session, holder_name: str, currency: str = "USD") -> Account:
-    account = Account(holder_name=holder_name, currency=currency.upper(), balance_cents=0)
+# --- Users / auth ----------------------------------------------------------
+def get_user_by_email(db: Session, email: str) -> User | None:
+    return db.scalar(select(User).where(User.email == email.strip().lower()))
+
+
+def register_user(db: Session, email: str, full_name: str, password: str) -> User:
+    email = email.strip().lower()
+    if get_user_by_email(db, email) is not None:
+        raise errors.EmailAlreadyRegistered("that email is already registered")
+    user = User(
+        email=email,
+        full_name=full_name.strip(),
+        password_hash=security.hash_password(password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def authenticate_user(db: Session, email: str, password: str) -> User:
+    user = get_user_by_email(db, email)
+    if user is None or not security.verify_password(password, user.password_hash):
+        raise errors.InvalidCredentials("incorrect email or password")
+    return user
+
+
+# --- Accounts --------------------------------------------------------------
+def create_account(
+    db: Session, owner_id: str, holder_name: str, currency: str = "USD"
+) -> Account:
+    account = Account(
+        user_id=owner_id, holder_name=holder_name, currency=currency.upper(), balance_cents=0
+    )
     db.add(account)
     db.commit()
     db.refresh(account)
     return account
 
 
-def get_account(db: Session, account_id: str) -> Account:
+def get_account(db: Session, account_id: str, owner_id: str | None = None) -> Account:
     account = db.get(Account, account_id)
-    if account is None:
+    # Return 404 (not 403) for someone else's account so ownership can't be probed.
+    if account is None or (owner_id is not None and account.user_id != owner_id):
         raise errors.AccountNotFound(f"account {account_id} not found")
     return account
 
 
-def list_accounts(db: Session, limit: int = 100, offset: int = 0) -> list[Account]:
-    stmt = select(Account).order_by(Account.created_at.desc()).limit(limit).offset(offset)
+def list_accounts(
+    db: Session, owner_id: str, limit: int = 100, offset: int = 0
+) -> list[Account]:
+    stmt = (
+        select(Account)
+        .where(Account.user_id == owner_id)
+        .order_by(Account.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     return list(db.scalars(stmt))
 
 
-def list_transactions(db: Session, account_id: str, limit: int = 100) -> list[Transaction]:
-    get_account(db, account_id)  # 404 if missing
+def list_transactions(
+    db: Session, account_id: str, owner_id: str, limit: int = 100
+) -> list[Transaction]:
+    get_account(db, account_id, owner_id)  # 404 if missing or not owned
     stmt = (
         select(Transaction)
         .where(Transaction.account_id == account_id)
@@ -61,6 +104,7 @@ def deposit(
     db: Session,
     account_id: str,
     amount_cents: int,
+    owner_id: str,
     reference: str | None = None,
     idempotency_key: str | None = None,
 ) -> Transaction:
@@ -71,7 +115,7 @@ def deposit(
     if existing:
         return existing
 
-    account = get_account(db, account_id)
+    account = get_account(db, account_id, owner_id)
     _require_active(account)
 
     account.balance_cents += amount_cents
@@ -93,6 +137,7 @@ def withdraw(
     db: Session,
     account_id: str,
     amount_cents: int,
+    owner_id: str,
     reference: str | None = None,
     idempotency_key: str | None = None,
 ) -> Transaction:
@@ -103,7 +148,7 @@ def withdraw(
     if existing:
         return existing
 
-    account = get_account(db, account_id)
+    account = get_account(db, account_id, owner_id)
     _require_active(account)
     if account.balance_cents < amount_cents:
         raise errors.InsufficientFunds("insufficient funds")
@@ -125,6 +170,7 @@ def withdraw(
 
 def transfer(
     db: Session,
+    owner_id: str,
     from_account_id: str,
     to_account_id: str,
     amount_cents: int,
@@ -148,8 +194,9 @@ def transfer(
         )
         return existing, credit  # type: ignore[return-value]
 
-    src = get_account(db, from_account_id)
-    dst = get_account(db, to_account_id)
+    # Both legs must belong to the caller (internal transfers between own accounts).
+    src = get_account(db, from_account_id, owner_id)
+    dst = get_account(db, to_account_id, owner_id)
     _require_active(src)
     _require_active(dst)
     if src.currency != dst.currency:
