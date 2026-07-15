@@ -1,47 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ApiError, api } from '../api/client';
+import { api } from '../api/client';
 import { ChevronRight, PlusIcon, WalletIcon } from '../components/icons';
-import { Avatar, Notice, Spinner, StatusBadge } from '../components/ui';
+import { Avatar, Notice, StatusBadge } from '../components/ui';
 import { formatMoney } from '../lib/money';
 import type { Account } from '../types';
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [name, setName] = useState('');
-  const [currency, setCurrency] = useState('USD');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-
-  async function refresh() {
-    try {
-      setAccounts(await api.listAccounts());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load accounts');
-    } finally {
-      setLoading(false);
-    }
-  }
 
   useEffect(() => {
-    refresh();
+    api
+      .listAccounts()
+      .then(setAccounts)
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load accounts'))
+      .finally(() => setLoading(false));
   }, []);
-
-  async function onCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setCreating(true);
-    try {
-      await api.createAccount(name.trim(), currency);
-      setName('');
-      await refresh();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to create account');
-    } finally {
-      setCreating(false);
-    }
-  }
 
   // Totals grouped by currency (summing across currencies would be meaningless).
   const totals = accounts.reduce<Record<string, number>>((m, a) => {
@@ -54,13 +30,20 @@ export default function AccountsPage() {
 
   return (
     <div className="animate-slide-up space-y-8">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-          Overview
-        </h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Your accounts, balances, and recent activity at a glance.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+            Overview
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Your accounts, balances, and recent activity at a glance.
+          </p>
+        </div>
+        <Link to="/accounts/new" className="btn-primary shrink-0">
+          <PlusIcon width={18} height={18} />
+          <span className="hidden sm:inline">New account</span>
+          <span className="sm:hidden">New</span>
+        </Link>
       </header>
 
       {/* Summary: balance hero + stat cards */}
@@ -109,42 +92,7 @@ export default function AccountsPage() {
         </div>
       </section>
 
-      {/* Open an account */}
-      <section className="card p-5 sm:p-6">
-        <h2 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-white">
-          <PlusIcon width={18} height={18} className="text-brand-600 dark:text-brand-400" />
-          Open an account
-        </h2>
-        <form onSubmit={onCreate} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="flex-1">
-            <span className="label">Account holder</span>
-            <input
-              className="input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ada Lovelace"
-              required
-            />
-          </label>
-          <label className="sm:w-36">
-            <span className="label">Currency</span>
-            <select className="input" value={currency} onChange={(e) => setCurrency(e.target.value)}>
-              <option>USD</option>
-              <option>EUR</option>
-              <option>GBP</option>
-            </select>
-          </label>
-          <button className="btn-primary sm:w-auto" disabled={creating}>
-            {creating ? <Spinner /> : <PlusIcon width={18} height={18} />}
-            Create account
-          </button>
-        </form>
-        {error && (
-          <div className="mt-3">
-            <Notice tone="error">{error}</Notice>
-          </div>
-        )}
-      </section>
+      {error && <Notice tone="error">{error}</Notice>}
 
       {/* Accounts list */}
       <section>
@@ -177,8 +125,12 @@ export default function AccountsPage() {
             </span>
             <p className="mt-4 font-medium text-slate-900 dark:text-white">No accounts yet</p>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Open your first account using the form above to get started.
+              Open your first account to get started.
             </p>
+            <Link to="/accounts/new" className="btn-primary mt-5">
+              <PlusIcon width={18} height={18} />
+              Open an account
+            </Link>
           </div>
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2">

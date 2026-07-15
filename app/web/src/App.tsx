@@ -3,6 +3,7 @@ import brandBg from './assets/brand-bg.jpg';
 import NavBar from './components/NavBar';
 import AccountPage from './pages/AccountPage';
 import AccountsPage from './pages/AccountsPage';
+import CreateAccountPage from './pages/CreateAccountPage';
 import TransferPage from './pages/TransferPage';
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
       <main key={location.pathname} className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         <Routes location={location}>
           <Route path="/" element={<AccountsPage />} />
+          <Route path="/accounts/new" element={<CreateAccountPage />} />
           <Route path="/accounts/:id" element={<AccountPage />} />
           <Route path="/transfer" element={<TransferPage />} />
         </Routes>
