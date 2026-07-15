@@ -27,12 +27,55 @@ class UserOut(BaseModel):
     full_name: str
     role: UserRole
     created_at: dt.datetime
+    # Effective admin status (role == admin OR email in ADMIN_EMAILS).
+    is_admin: bool = False
 
 
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+    # Demo only: the reset token (normally emailed). None in production.
+    reset_token: str | None = None
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class AdminAccountOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    holder_name: str
+    currency: str
+    balance_cents: int
+    status: AccountStatus
+    created_at: dt.datetime
+    owner_id: str
+    owner_email: EmailStr
+    owner_name: str
+
+
+class CurrencyBalance(BaseModel):
+    currency: str
+    total_cents: int
+
+
+class AdminStatsOut(BaseModel):
+    user_count: int
+    account_count: int
+    transaction_count: int
+    balances_by_currency: list[CurrencyBalance]
 
 
 class AccountCreate(BaseModel):

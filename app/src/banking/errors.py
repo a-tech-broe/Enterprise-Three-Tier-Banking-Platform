@@ -49,3 +49,13 @@ class InvalidCredentials(BankingError):
 class NotAuthenticated(BankingError):
     status_code = 401
     code = "not_authenticated"
+
+
+class Forbidden(BankingError):
+    status_code = 403
+    code = "forbidden"
+
+
+class TransactionNotFound(BankingError):
+    status_code = 404
+    code = "transaction_not_found"

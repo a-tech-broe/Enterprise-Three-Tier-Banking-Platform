@@ -39,6 +39,19 @@ class Settings(BaseSettings):
     )
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     jwt_expire_minutes: int = Field(default=720, alias="JWT_EXPIRE_MINUTES")
+    reset_token_expire_minutes: int = Field(default=30, alias="RESET_TOKEN_EXPIRE_MINUTES")
+
+    # Comma-separated emails treated as admins (in addition to any user whose
+    # stored role is 'admin'). Lets you grant back-office access without a DB edit.
+    admin_emails: str = Field(default="", alias="ADMIN_EMAILS")
+
+    # Demo convenience: return the password-reset token in the forgot-password
+    # response (since there's no email delivery). Disable in real deployments and
+    # email the reset link instead.
+    expose_reset_token: bool = Field(default=True, alias="EXPOSE_RESET_TOKEN")
+
+    def admin_email_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
 
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
