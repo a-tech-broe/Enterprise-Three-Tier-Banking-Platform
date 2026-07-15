@@ -66,15 +66,17 @@
       "Effect": "Allow",
       "Action": [
         "route53domains:GetDomainDetail",
+        "route53domains:GetOperationDetail",
+        "route53domains:ListOperations",
+        "route53domains:ListDomains",
+        "route53domains:ListTagsForDomain",
+        "route53domains:UpdateTagsForDomain",
         "route53domains:UpdateDomainNameservers",
         "route53domains:EnableDomainAutoRenew",
         "route53domains:DisableDomainAutoRenew",
         "route53domains:EnableDomainTransferLock",
         "route53domains:DisableDomainTransferLock",
-        "route53domains:UpdateDomainContactPrivacy",
-        "route53domains:ListDomains",
-        "route53domains:GetOperationDetail",
-        "route53domains:ListOperations"
+        "route53domains:UpdateDomainContactPrivacy"
       ],
       "Resource": "*"
     },
