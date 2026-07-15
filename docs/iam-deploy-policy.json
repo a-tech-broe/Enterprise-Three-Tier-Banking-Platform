@@ -72,7 +72,9 @@
         "route53domains:EnableDomainTransferLock",
         "route53domains:DisableDomainTransferLock",
         "route53domains:UpdateDomainContactPrivacy",
-        "route53domains:ListDomains"
+        "route53domains:ListDomains",
+        "route53domains:GetOperationDetail",
+        "route53domains:ListOperations"
       ],
       "Resource": "*"
     },
