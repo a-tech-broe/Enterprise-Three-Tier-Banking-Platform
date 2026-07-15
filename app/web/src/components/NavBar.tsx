@@ -38,6 +38,11 @@ export default function NavBar() {
         <NavLink to="/transfer" className={linkClass}>
           Transfer
         </NavLink>
+        {user?.is_admin && (
+          <NavLink to="/admin" className={linkClass}>
+            Admin
+          </NavLink>
+        )}
 
         <div className="ml-auto flex items-center gap-1.5">
           <button
