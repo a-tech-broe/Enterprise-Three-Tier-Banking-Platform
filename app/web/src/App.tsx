@@ -13,7 +13,7 @@ export default function App() {
           competes with content. A touch stronger on dark grounds to register. */}
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center bg-fixed opacity-[0.05] dark:opacity-[0.08]"
+        className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center bg-fixed opacity-[0.10] dark:opacity-[0.14]"
         style={{ backgroundImage: `url(${brandBg})` }}
       />
       {/* Ambient brand glow behind the page content */}
