@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from banking import database
+from banking.config import get_settings
 from banking.main import create_app
 
 
@@ -18,6 +19,7 @@ def app(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("ENVIRONMENT", "test")
     monkeypatch.setenv("JWT_SECRET", "test-secret-that-is-at-least-32-bytes-long")
+    get_settings.cache_clear()  # pick up this test's env, not a prior test's
     database.init_engine("sqlite+pysqlite:///:memory:")
     return create_app()
 

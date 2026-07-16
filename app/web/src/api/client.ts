@@ -1,6 +1,8 @@
 import type {
   Account,
   AccountStatus,
+  AdminAccount,
+  AdminStats,
   AuthResponse,
   Insights,
   Transaction,
@@ -90,6 +92,24 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => request<User>('/api/v1/auth/me'),
+  forgotPassword: (email: string) =>
+    request<{ message: string; reset_token: string | null }>('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (token: string, new_password: string) =>
+    request<AuthResponse>('/api/v1/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password }),
+    }),
+
+  // Admin / back-office
+  adminStats: () => request<AdminStats>('/api/v1/admin/stats'),
+  adminAccounts: () => request<AdminAccount[]>('/api/v1/admin/accounts'),
+  adminAccountTransactions: (id: string) =>
+    request<Transaction[]>(`/api/v1/admin/accounts/${id}/transactions`),
+  reverseTransaction: (txnId: string) =>
+    request<Transaction>(`/api/v1/admin/transactions/${txnId}/reverse`, { method: 'POST' }),
 
   listAccounts: () => request<Account[]>('/api/v1/accounts'),
   getAccount: (id: string) => request<Account>(`/api/v1/accounts/${id}`),

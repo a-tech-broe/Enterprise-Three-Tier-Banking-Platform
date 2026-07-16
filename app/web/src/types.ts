@@ -3,7 +3,26 @@ export interface User {
   email: string;
   full_name: string;
   role: 'user' | 'admin';
+  is_admin: boolean;
   created_at: string;
+}
+
+export interface AdminAccount extends Account {
+  owner_id: string;
+  owner_email: string;
+  owner_name: string;
+}
+
+export interface CurrencyBalance {
+  currency: string;
+  total_cents: number;
+}
+
+export interface AdminStats {
+  user_count: number;
+  account_count: number;
+  transaction_count: number;
+  balances_by_currency: CurrencyBalance[];
 }
 
 export interface AuthResponse {

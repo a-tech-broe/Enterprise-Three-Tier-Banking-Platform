@@ -39,6 +39,24 @@ class Settings(BaseSettings):
     )
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     jwt_expire_minutes: int = Field(default=720, alias="JWT_EXPIRE_MINUTES")
+    reset_token_expire_minutes: int = Field(default=30, alias="RESET_TOKEN_EXPIRE_MINUTES")
+
+    # Comma-separated emails treated as admins (in addition to any user whose
+    # stored role is 'admin'). Lets you grant back-office access without a DB edit.
+    admin_emails: str = Field(default="", alias="ADMIN_EMAILS")
+
+    # Demo convenience: return the password-reset token in the forgot-password
+    # response. Once email delivery is live and out of the SES sandbox, set this
+    # false so the token is only ever emailed.
+    expose_reset_token: bool = Field(default=True, alias="EXPOSE_RESET_TOKEN")
+
+    # Email delivery (Amazon SES). email_from empty => email disabled. app_base_url
+    # is the public origin used to build links in emails (e.g. https://skybroe.com).
+    email_from: str = Field(default="", alias="EMAIL_FROM")
+    app_base_url: str = Field(default="", alias="APP_BASE_URL")
+
+    def admin_email_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
 
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

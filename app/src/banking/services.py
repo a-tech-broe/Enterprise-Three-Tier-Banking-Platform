@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import String, cast, or_, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from . import errors, security
@@ -41,6 +41,17 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
     user = get_user_by_email(db, email)
     if user is None or not security.verify_password(password, user.password_hash):
         raise errors.InvalidCredentials("incorrect email or password")
+    return user
+
+
+def get_user(db: Session, user_id: str) -> User | None:
+    return db.get(User, user_id)
+
+
+def set_user_password(db: Session, user: User, new_password: str) -> User:
+    user.password_hash = security.hash_password(new_password)
+    db.commit()
+    db.refresh(user)
     return user
 
 
@@ -317,3 +328,126 @@ def transfer(
     db.refresh(debit)
     db.refresh(credit)
     return debit, credit
+
+
+# --- Admin / back-office ---------------------------------------------------
+def list_all_accounts(db: Session, limit: int = 500, offset: int = 0) -> list[Account]:
+    stmt = select(Account).order_by(Account.created_at.desc()).limit(limit).offset(offset)
+    return list(db.scalars(stmt))
+
+
+def list_account_transactions_any(
+    db: Session, account_id: str, limit: int = 200
+) -> list[Transaction]:
+    """Transactions for any account, without an ownership check (admin only)."""
+    stmt = (
+        select(Transaction)
+        .where(Transaction.account_id == account_id)
+        .order_by(Transaction.created_at.desc())
+        .limit(limit)
+    )
+    return list(db.scalars(stmt))
+
+
+def admin_stats(db: Session) -> dict:
+    balances = db.execute(
+        select(Account.currency, func.coalesce(func.sum(Account.balance_cents), 0)).group_by(
+            Account.currency
+        )
+    ).all()
+    return {
+        "user_count": db.scalar(select(func.count()).select_from(User)) or 0,
+        "account_count": db.scalar(select(func.count()).select_from(Account)) or 0,
+        "transaction_count": db.scalar(select(func.count()).select_from(Transaction)) or 0,
+        "balances_by_currency": [
+            {"currency": cur, "total_cents": int(total)} for cur, total in balances
+        ],
+    }
+
+
+def reverse_transaction(db: Session, txn_id: str) -> Transaction:
+    """Post a compensating entry that undoes a transaction (admin clawback).
+
+    Deposits/withdrawals reverse on their own account; transfers reverse both
+    legs (money moves back). Guards against reversing a reversal, double
+    reversal, and any reversal that would overdraw an account.
+    """
+    txn = db.get(Transaction, txn_id)
+    if txn is None:
+        raise errors.TransactionNotFound(f"transaction {txn_id} not found")
+    if txn.reference and txn.reference.startswith("Reversal of "):
+        raise errors.InvalidOperation("cannot reverse a reversal")
+
+    if txn.type in (TxnType.deposit, TxnType.withdrawal):
+        marker = f"Reversal of {txn.id}"
+        _guard_not_reversed(db, marker)
+        account = get_account(db, txn.account_id)
+        if txn.type == TxnType.deposit:
+            if account.balance_cents < txn.amount_cents:
+                raise errors.InsufficientFunds("cannot reverse: insufficient balance")
+            account.balance_cents -= txn.amount_cents
+            rev_type = TxnType.withdrawal
+        else:
+            account.balance_cents += txn.amount_cents
+            rev_type = TxnType.deposit
+        rev = Transaction(
+            account_id=account.id,
+            type=rev_type,
+            amount_cents=txn.amount_cents,
+            balance_after_cents=account.balance_cents,
+            reference=marker,
+        )
+        db.add(rev)
+        db.commit()
+        db.refresh(rev)
+        return rev
+
+    # Transfer: normalise to the outgoing leg so re-reversal of either leg is caught.
+    out_leg = txn if txn.type == TxnType.transfer_out else _paired_out_leg(db, txn)
+    if out_leg is None:
+        raise errors.InvalidOperation("could not locate the transfer to reverse")
+    marker = f"Reversal of {out_leg.id}"
+    _guard_not_reversed(db, marker)
+
+    src = get_account(db, out_leg.account_id)  # originally debited
+    dst = get_account(db, out_leg.counterparty_account_id)  # originally credited
+    if dst.balance_cents < out_leg.amount_cents:
+        raise errors.InsufficientFunds("cannot reverse: recipient has insufficient balance")
+    dst.balance_cents -= out_leg.amount_cents
+    src.balance_cents += out_leg.amount_cents
+    debit = Transaction(
+        account_id=dst.id,
+        type=TxnType.transfer_out,
+        amount_cents=out_leg.amount_cents,
+        balance_after_cents=dst.balance_cents,
+        counterparty_account_id=src.id,
+        reference=marker,
+    )
+    credit = Transaction(
+        account_id=src.id,
+        type=TxnType.transfer_in,
+        amount_cents=out_leg.amount_cents,
+        balance_after_cents=src.balance_cents,
+        counterparty_account_id=dst.id,
+        reference=marker,
+    )
+    db.add_all([debit, credit])
+    db.commit()
+    db.refresh(debit)
+    return debit
+
+
+def _guard_not_reversed(db: Session, marker: str) -> None:
+    if db.scalar(select(Transaction).where(Transaction.reference == marker)):
+        raise errors.InvalidOperation("transaction already reversed")
+
+
+def _paired_out_leg(db: Session, credit: Transaction) -> Transaction | None:
+    return db.scalar(
+        select(Transaction).where(
+            Transaction.type == TxnType.transfer_out,
+            Transaction.account_id == credit.counterparty_account_id,
+            Transaction.counterparty_account_id == credit.account_id,
+            Transaction.amount_cents == credit.amount_cents,
+        )
+    )

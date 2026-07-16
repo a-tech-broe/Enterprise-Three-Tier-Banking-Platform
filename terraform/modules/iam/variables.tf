@@ -33,6 +33,12 @@ variable "ssm_parameter_arns" {
   default     = []
 }
 
+variable "ses_identity_arns" {
+  description = "SES identity ARNs the instances may send email from (empty disables SES send)."
+  type        = list(string)
+  default     = []
+}
+
 variable "enable_cloudwatch_agent" {
   description = "Attach the CloudWatchAgentServerPolicy managed policy."
   type        = bool
