@@ -176,19 +176,18 @@ app-deploy (dispatch/push) ─► test ─► build ─► Trivy scan ─► pus
 |----------|---------|---------|
 | `bootstrap` | OIDC provider + role trust/permissions | one-time |
 | `validate` / `infra-plan` | — (checks only) | PR / dispatch |
-| **`infra-deploy`** | **infrastructure** (Terraform + base config) | push `dev`→dev · push `main`→prod · dispatch |
+| **`infra-deploy`** | **infrastructure** (Terraform + base config) | push `dev`→dev · dispatch (any env) |
 | `infra-destroy` | tears down an environment | dispatch (guarded) |
 | `app-ci` | — (build/test/scan only) | PR / push to `app/` |
-| **`app-deploy`** | **the application** (image → instances) | push `dev`→dev · push `main`→prod · dispatch |
+| **`app-deploy`** | **the application** (image → instances) | push `dev`→dev · dispatch (any env) |
 
-**Promotion model — auto to dev, PR-gated to prod.** A push to the **`dev`**
-branch deploys straight to the **dev** environment (no approval). Prod is only
-reached by **merging a PR into `main`**, which targets the **prod** environment;
-its required reviewers hold the deploy for manual approval. `workflow_dispatch`
-can still target any environment on demand. This requires, in **Settings →
-Environments**: `prod` with **required reviewers** (the manual gate) and `dev`
-with **none** (auto) — and a branch-protection rule on `main` so it only advances
-via PR.
+**Promotion model — auto to dev, dispatch-only above it.** A push to the **`dev`**
+branch deploys straight to the **dev** environment (no approval). **qa / uat /
+prod deploy only via an explicit `workflow_dispatch`** (Actions → Run workflow →
+choose the env) — merging to `main` never auto-deploys prod, so production is
+always a deliberate, manual act. For an extra gate, add **required reviewers** to
+the `prod` (and `uat`) GitHub Environment; the deploy job binds to it and pauses
+for approval.
 
 - **OIDC only** — no long-lived cloud credentials in the repo or CI (admin keys
   are used once by `bootstrap`, then removed).
