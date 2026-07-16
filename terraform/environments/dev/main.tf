@@ -26,8 +26,9 @@ module "platform" {
   private_db_subnet_cidrs  = ["10.10.20.0/24", "10.10.21.0/24", "10.10.22.0/24"]
   single_nat_gateway       = true
 
-  # Compute
-  instance_type        = "m5.xlarge"
+  # Compute. t3.medium (2 vCPU / 4 GB) is ample for one nginx + app container and
+  # keeps dev cheap (~$30/mo vs ~$140 for m5.xlarge).
+  instance_type        = "t3.medium"
   asg_min_size         = 1
   asg_max_size         = 3
   asg_desired_capacity = 1
