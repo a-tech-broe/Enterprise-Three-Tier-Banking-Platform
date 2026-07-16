@@ -100,17 +100,19 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Empty S3 buckets (incl. all versions)"
+          # Delete in batches via a file (not a CLI arg) — a full bucket of access
+          # logs overflows the argv length limit ("Argument list too long").
           empty_bucket() {
             local b="$1"
             aws s3api head-bucket --bucket "$b" 2>/dev/null || { echo "  (no bucket $b)"; return 0; }
-            local sel objs n
+            local sel n payload="${RUNNER_TEMP:-/tmp}/del.json"
             for sel in Versions DeleteMarkers; do
               while :; do
-                objs=$(aws s3api list-object-versions --bucket "$b" --max-items 1000 \
-                  --query "{Objects: ${sel}[].{Key:Key,VersionId:VersionId}}" --output json)
-                n=$(echo "$objs" | jq '.Objects | length')
+                aws s3api list-object-versions --bucket "$b" --max-items 1000 \
+                  --query "{Objects: ${sel}[].{Key:Key,VersionId:VersionId}}" --output json > "$payload"
+                n=$(jq '.Objects | length' "$payload")
                 [ "$n" -eq 0 ] && break
-                aws s3api delete-objects --bucket "$b" --delete "$objs" >/dev/null
+                aws s3api delete-objects --bucket "$b" --delete "file://${payload}" >/dev/null
                 echo "  removed $n ${sel} from $b"
               done
             done
