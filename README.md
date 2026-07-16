@@ -25,11 +25,24 @@ VPC (3 AZ)
 └── Private DB Subnets    → Multi-AZ RDS PostgreSQL (KMS, Secrets Manager)
 ```
 
-The application ([`app/`](app/)) is a FastAPI banking service — accounts,
-transactions, and transfers with ledger integrity, DB credentials from Secrets
-Manager — running as a container behind nginx. The React web UI is built and
-**bundled into the same image**, served by FastAPI at the ALB root (`/`), with
-the API under `/api/v1/*` — so the whole thing is one URL, one deployable image.
+The application ([`app/`](app/)) is **Atechbroe Bank** — a FastAPI service with
+JWT auth and per-user data: register / login, accounts, deposits & withdrawals,
+transfers with ledger integrity, statements (date filter · search · CSV export),
+spending insights, account actions (rename / freeze / close), a password-reset
+flow, and an **admin / back-office** (all accounts, reverse a transaction). Money
+is integer cents end-to-end; DB credentials come from Secrets Manager. The React
+web UI is built and **bundled into the same image**, served by FastAPI at the ALB
+root (`/`) with the API under `/api/v1/*` — one URL, one deployable image, tested
+by 45 pytest cases.
+
+**Auth & app config.** `/api/v1/auth/*` issues JWT sessions and every
+account/transfer/statement/insight is scoped to the caller. Terraform provisions
+the app's runtime config: a random **JWT signing secret** (KMS-encrypted SSM
+`SecureString`, fetched at container start and shared across instances),
+**`ADMIN_EMAILS`** for back-office access, and **SES** for password-reset emails
+(Easy DKIM records in the hosted zone — new SES accounts are sandboxed until you
+request production access). Set per environment with `admin_emails` /
+`enable_email` / `expose_reset_token`.
 
 Full diagrams and design rationale: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -40,8 +53,10 @@ Logs · S3 Gateway Endpoint · Security Groups (three-tier, least privilege) · 
 role + instance profile · KMS CMKs · S3 remote-state backend · DynamoDB locking ·
 Application Load Balancer · Launch Template (IMDSv2, encrypted EBS) · Auto Scaling
 Group (rolling instance refresh, target-tracking) · Multi-AZ-capable RDS
-PostgreSQL · Secrets Manager · CloudWatch dashboards/alarms · SNS · S3 buckets for
-ALB access logs and the Ansible SSM transfer channel.
+PostgreSQL · Secrets Manager · SSM Parameter Store (app image + KMS-encrypted JWT
+secret) · SES domain identity (Easy DKIM) for password-reset email · CloudWatch
+dashboards/alarms · SNS · S3 buckets for ALB access logs and the Ansible SSM
+transfer channel.
 
 **TLS / DNS.** The `dns` module creates a public Route 53 hosted zone, requests +
 DNS-validates an ACM certificate, and the ALB serves it on an HTTPS listener
@@ -71,9 +86,11 @@ by `Environment` + `Role` tags.
 ## Repository layout
 
 ```
-app/                    Banking application
-  src/banking/  tests/  FastAPI API (accounts, transactions, transfers) + pytest
-  web/                  React + Vite banking UI (calls the API)
+app/                    Atechbroe Bank application
+  src/banking/          FastAPI: auth · accounts · transfers · admin · services ·
+                        security (JWT+bcrypt) · email (SES) · models · schemas
+  tests/                pytest (45 cases: auth, isolation, ledger, admin, reset…)
+  web/                  React + Vite UI (login, dashboard, admin) — bundled in image
   Dockerfile  docker-compose.yml  requirements*.txt  pyproject.toml
 terraform/
   bootstrap/            S3 + DynamoDB + KMS remote-state backend (run once)
@@ -117,8 +134,9 @@ scripts/        bootstrap-backend.sh · setup-oidc.sh
    test → build (API + web UI) → Trivy scan → push to Docker Hub → roll the
    container on the instances. Run `infra-deploy` at least once before the first
    `app-deploy` so the instances have the container runtime. Then open
-   **https://skybroe.com** in a browser: the web UI is at `/`, Swagger at `/docs`
-   (before DNS is enabled, use the ALB DNS name over HTTP).
+   **https://skybroe.com**: register an account to sign in (web UI at `/`, Swagger
+   at `/docs`; before DNS is enabled use the ALB DNS name over HTTP). Any address
+   listed in `admin_emails` gets the **Admin** back-office view.
 
 Full setup, IAM policy details, and the operations runbook:
 [`docs/RUNBOOK.md`](docs/RUNBOOK.md) · [`docs/SECURITY.md`](docs/SECURITY.md).
