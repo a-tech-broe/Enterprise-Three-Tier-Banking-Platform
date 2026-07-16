@@ -176,15 +176,24 @@ app-deploy (dispatch/push) ─► test ─► build ─► Trivy scan ─► pus
 |----------|---------|---------|
 | `bootstrap` | OIDC provider + role trust/permissions | one-time |
 | `validate` / `infra-plan` | — (checks only) | PR / dispatch |
-| **`infra-deploy`** | **infrastructure** (Terraform + base config) | dispatch / push to `terraform`,`ansible` |
+| **`infra-deploy`** | **infrastructure** (Terraform + base config) | push `dev`→dev · push `main`→prod · dispatch |
 | `infra-destroy` | tears down an environment | dispatch (guarded) |
 | `app-ci` | — (build/test/scan only) | PR / push to `app/` |
-| **`app-deploy`** | **the application** (image → instances) | dispatch / push to `app/` |
+| **`app-deploy`** | **the application** (image → instances) | push `dev`→dev · push `main`→prod · dispatch |
+
+**Promotion model — auto to dev, PR-gated to prod.** A push to the **`dev`**
+branch deploys straight to the **dev** environment (no approval). Prod is only
+reached by **merging a PR into `main`**, which targets the **prod** environment;
+its required reviewers hold the deploy for manual approval. `workflow_dispatch`
+can still target any environment on demand. This requires, in **Settings →
+Environments**: `prod` with **required reviewers** (the manual gate) and `dev`
+with **none** (auto) — and a branch-protection rule on `main` so it only advances
+via PR.
 
 - **OIDC only** — no long-lived cloud credentials in the repo or CI (admin keys
   are used once by `bootstrap`, then removed).
-- **Approval gates** — `apply` (infra) and `deploy` (app) bind to a GitHub
-  Environment; add reviewers on `uat`/`prod` to gate production.
+- **Approval gates** — the `apply` (infra) and `deploy` (app) jobs bind to the
+  target GitHub Environment; reviewers on `prod` (and optionally `uat`) gate it.
 - **App delivery is immutable** — images are tagged by git SHA, pushed to a
   Docker Hub repo (Trivy-scanned pre-push); instances pull the pinned image on boot and on deploy.
 

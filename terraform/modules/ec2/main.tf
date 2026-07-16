@@ -91,14 +91,18 @@ resource "aws_autoscaling_group" "this" {
   health_check_grace_period = var.health_check_grace_period
   capacity_rebalance        = true
 
+  # Pin to the specific latest version (not "$Latest"): this makes the ASG show a
+  # diff whenever the launch template changes, which is what triggers the implicit
+  # instance refresh below. With "$Latest" the ASG never changes on a new LT
+  # version, so instances silently never roll.
   launch_template {
     id      = aws_launch_template.this.id
-    version = "$Latest"
+    version = aws_launch_template.this.latest_version
   }
 
   # Roll instances automatically when the launch template changes (immutable
-  # infra). launch_template changes always trigger a refresh implicitly, so no
-  # explicit `triggers` is needed.
+  # infra). Because the ASG now references a concrete version number, any LT
+  # change updates the ASG and implicitly triggers a refresh.
   instance_refresh {
     strategy = "Rolling"
     preferences {
