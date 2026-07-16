@@ -1,8 +1,10 @@
 name: infra-destroy
 
-# Guarded teardown. Requires typing the environment name to confirm, and is
-# gated by the GitHub Environment's required reviewers. Prod destroys should
-# additionally be protected by a branch/environment protection rule.
+# Guarded teardown. Dispatch-only (never on push). Requires typing the environment
+# name to confirm, and the destroy job binds to the GitHub Environment so its
+# required reviewers hold it for approval. A prepare step first clears the things
+# that would otherwise make `terraform destroy` fail halfway: RDS deletion
+# protection, a stale final snapshot, and non-empty (versioned) S3 buckets.
 on:
   workflow_dispatch:
     inputs:
@@ -23,6 +25,7 @@ permissions:
 env:
   TF_VERSION: "1.9.8"
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  PROJECT: banking-platform
 
 concurrency:
   group: destroy-${{ github.event.inputs.environment }}
@@ -48,19 +51,20 @@ jobs:
       - name: Validate confirmation
         run: |
           if [ "${{ github.event.inputs.confirm }}" != "${{ github.event.inputs.environment }}" ]; then
-            echo "Confirmation '${{ github.event.inputs.confirm }}' does not match environment '${{ github.event.inputs.environment }}'."
+            echo "::error::Confirmation '${{ github.event.inputs.confirm }}' does not match environment '${{ github.event.inputs.environment }}'."
             exit 1
           fi
-      - name: Block prod destroys without explicit override
+      - name: Warn on production teardown
         if: github.event.inputs.environment == 'prod'
-        run: |
-          echo "::warning::Destroying PROD. This proceeds only after environment approval."
+        run: echo "::warning::Destroying PROD — proceeds only after Environment approval."
 
   destroy:
     name: destroy
     needs: guard
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}   # <-- approval gate
+    env:
+      ENVIRONMENT: ${{ github.event.inputs.environment }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure AWS credentials (OIDC)
@@ -69,17 +73,63 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: gha-destroy
+
+      - name: Prepare teardown (clear destroy blockers)
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          PREFIX="${PROJECT}-${ENVIRONMENT}"
+          DB_ID="${PREFIX}-postgres"
+
+          echo "::group::Disable RDS deletion protection"
+          if aws rds describe-db-instances --db-instance-identifier "$DB_ID" >/dev/null 2>&1; then
+            aws rds modify-db-instance --db-instance-identifier "$DB_ID" \
+              --no-deletion-protection --apply-immediately >/dev/null
+            echo "deletion protection disabled on $DB_ID"
+          else
+            echo "no RDS instance $DB_ID (nothing to do)"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Remove any stale final snapshot"
+          SNAP="${PREFIX}-postgres-final"
+          if aws rds describe-db-snapshots --db-snapshot-identifier "$SNAP" >/dev/null 2>&1; then
+            aws rds delete-db-snapshot --db-snapshot-identifier "$SNAP" >/dev/null || true
+            echo "deleted stale snapshot $SNAP (a fresh one is taken on destroy for non-dev)"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Empty S3 buckets (incl. all versions)"
+          empty_bucket() {
+            local b="$1"
+            aws s3api head-bucket --bucket "$b" 2>/dev/null || { echo "  (no bucket $b)"; return 0; }
+            local sel objs n
+            for sel in Versions DeleteMarkers; do
+              while :; do
+                objs=$(aws s3api list-object-versions --bucket "$b" --max-items 1000 \
+                  --query "{Objects: ${sel}[].{Key:Key,VersionId:VersionId}}" --output json)
+                n=$(echo "$objs" | jq '.Objects | length')
+                [ "$n" -eq 0 ] && break
+                aws s3api delete-objects --bucket "$b" --delete "$objs" >/dev/null
+                echo "  removed $n ${sel} from $b"
+              done
+            done
+          }
+          empty_bucket "${PREFIX}-alb-logs-${ACCOUNT_ID}"
+          empty_bucket "${PREFIX}-ansible-ssm-${ACCOUNT_ID}"
+          echo "::endgroup::"
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
       - name: Init
-        working-directory: terraform/environments/${{ github.event.inputs.environment }}
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
         run: |
           terraform init -input=false \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET || secrets.TF_STATE_BUCKET }}" \
             -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || secrets.TF_LOCK_TABLE }}" \
             -backend-config="region=${{ env.AWS_REGION }}"
       - name: Destroy
-        working-directory: terraform/environments/${{ github.event.inputs.environment }}
+        working-directory: terraform/environments/${{ env.ENVIRONMENT }}
         run: terraform destroy -input=false -auto-approve
