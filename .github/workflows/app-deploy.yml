@@ -16,7 +16,7 @@ on:
         options: [dev, qa, uat, prod]
         default: dev
   push:
-    branches: [dev, main]
+    branches: [dev]
     paths:
       - "app/**"
 
@@ -26,13 +26,13 @@ permissions:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-  # Branch -> environment: a push to `dev` ships to dev automatically; a push to
-  # `main` (only via PR) ships to prod, gated by the prod Environment's reviewers.
-  TARGET_ENV: ${{ github.event.inputs.environment || (github.ref_name == 'main' && 'prod') || 'dev' }}
+  # A push to `dev` ships to dev automatically. Prod (and qa/uat) ship ONLY via an
+  # explicit workflow_dispatch — merging to main never auto-ships to prod.
+  TARGET_ENV: ${{ github.event.inputs.environment || 'dev' }}
   PROJECT: banking-platform
 
 concurrency:
-  group: app-deploy-${{ github.event.inputs.environment || github.ref_name }}
+  group: app-deploy-${{ github.event.inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 jobs:
@@ -97,9 +97,8 @@ jobs:
     name: deploy to instances
     needs: build-push
     runs-on: ubuntu-latest
-    # Binds to the target Environment; prod's required reviewers hold here for
-    # manual approval, while dev deploys straight through.
-    environment: ${{ github.event.inputs.environment || (github.ref_name == 'main' && 'prod') || 'dev' }}
+    # Binds to the target Environment (its reviewers, if any, gate the deploy).
+    environment: ${{ github.event.inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure AWS credentials (OIDC)

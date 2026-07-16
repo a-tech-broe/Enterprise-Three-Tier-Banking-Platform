@@ -11,7 +11,7 @@ on:
         options: [dev, qa, uat, prod]
         default: dev
   push:
-    branches: [dev, main]
+    branches: [dev]
     paths:
       - "terraform/**"
       - "ansible/**"
@@ -25,13 +25,13 @@ env:
   # Region defaults to us-east-1 (all environments target it); override by
   # setting an AWS_REGION repository variable.
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-  # Branch -> environment. A push to `dev` deploys to dev automatically; a push to
-  # `main` (only reached via PR) deploys to prod, which the prod Environment's
-  # required reviewers hold for manual approval. workflow_dispatch overrides both.
-  TARGET_ENV: ${{ github.event.inputs.environment || (github.ref_name == 'main' && 'prod') || 'dev' }}
+  # A push to `dev` auto-deploys the dev environment. Prod (and qa/uat) are
+  # deploy ONLY via an explicit workflow_dispatch — merging to main never
+  # auto-deploys prod, which keeps production changes a deliberate, manual act.
+  TARGET_ENV: ${{ github.event.inputs.environment || 'dev' }}
 
 concurrency:
-  group: deploy-${{ github.event.inputs.environment || github.ref_name }}
+  group: deploy-${{ github.event.inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 jobs:
