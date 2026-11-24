@@ -21,7 +21,11 @@ WORKDIR /build
 COPY requirements.txt .
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip "setuptools>=78.1.1" \
-    && /opt/venv/bin/pip install -r requirements.txt
+    && /opt/venv/bin/pip install -r requirements.txt \
+    # Build tools aren't needed at runtime; strip them so their vendored deps
+    # (setuptools 70.x, CVE-2025-47273) never reach the runtime image.
+    && /opt/venv/bin/pip uninstall -y setuptools \
+    && /opt/venv/bin/python -m pip uninstall -y pip
 
 # ---------- runtime ----------
 FROM python:3.12-slim AS runtime
