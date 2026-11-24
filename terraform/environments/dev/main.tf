@@ -42,26 +42,22 @@ module "platform" {
   db_deletion_protection = false
   db_skip_final_snapshot = true
 
-  # TLS / DNS: serve the app at https://skybroe.com. Terraform creates the hosted
-  # zone, requests + DNS-validates an ACM cert, adds the HTTPS listener (with an
-  # 80->443 redirect) and the apex alias to the ALB. Because skybroe.com is
-  # registered in this account's Route 53 Domains, manage_registrar_nameservers
-  # delegates the domain to the new zone automatically, so cert validation
-  # completes in the same apply with no manual registrar step.
+  # TLS / DNS: serve the app at https://bank.skybroe.com. The skybroe.com apex
+  # (and its hosted zone, registrar delegation and SES identity) belong to a
+  # separate project (ecs-platform), so we reuse that EXISTING zone, add only the
+  # bank.* alias + ACM validation records, and never touch the registrar.
   enable_dns                   = true
-  create_hosted_zone           = true
-  manage_registrar_nameservers = true
+  create_hosted_zone           = false
+  manage_registrar_nameservers = false
   zone_name                    = "skybroe.com"
-  record_name                  = "skybroe.com"
+  record_name                  = "bank.skybroe.com"
 
   # Back-office access: these emails get admin (comma-separated). Edit as needed.
   admin_emails = "jen4rill@gmail.com"
 
-  # Transactional email via SES (password-reset links). Verifies skybroe.com with
-  # Easy DKIM in the hosted zone and lets the app send from no-reply@skybroe.com.
-  # New SES accounts are sandboxed — request production access to email arbitrary
-  # users, then set expose_reset_token = false so the token is only ever emailed.
-  enable_email = true
+  # Transactional email via SES is OFF: skybroe.com's SES domain identity/DKIM is
+  # owned by the other project. Re-enable once a separate sending identity exists.
+  enable_email = false
 
   # Observability
   alarm_email_endpoints = var.alarm_email_endpoints
