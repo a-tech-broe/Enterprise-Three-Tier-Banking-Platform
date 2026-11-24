@@ -101,7 +101,7 @@ jobs:
           docker inspect --format '{{json .RootFS.Layers}}' "${{ steps.meta.outputs.image }}"
           docker history --no-trunc --format '{{.CreatedBy}}' "${{ steps.meta.outputs.image }}" | cut -c1-160
           docker run --rm --entrypoint sh "${{ steps.meta.outputs.image }}" -c \
-            "find / -xdev -iname '*setuptools*' -not -path '/opt/venv/*' 2>/dev/null | head -20"
+            "grep -rIl -e '70\\.3\\.0' /opt/venv 2>/dev/null | head -20; ls /opt/venv/lib/python3.12/site-packages | grep -iE 'setuptools|pkg_res|distutils|egg'"
       - name: Push to Docker Hub
         run: docker push "${{ steps.meta.outputs.image }}"
 
