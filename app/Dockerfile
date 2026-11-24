@@ -36,10 +36,15 @@ RUN groupadd --system app && useradd --system --gid app --home /app app \
     && apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    # Base image ships setuptools 70.x (CVE-2025-47273). The runtime only uses the
-    # /opt/venv copy (patched in the builder), so drop every stale system copy.
-    && echo "stale setuptools:" && find / -xdev -iname 'setuptools-70*' -print \
-    && find / -xdev -iname 'setuptools-70*' -prune -exec rm -rf {} +
+    # The base image's system pip vendors setuptools 70.x (CVE-2025-47273). The
+    # runtime only uses /opt/venv (patched in the builder), so remove system pip
+    # and any stale setuptools copies outright.
+    && rm -rf /usr/local/lib/python3.12/site-packages/pip \
+              /usr/local/lib/python3.12/site-packages/pip-*.dist-info \
+              /usr/local/lib/python3.12/ensurepip /usr/local/bin/pip* \
+    && find / -xdev -iname 'setuptools-70*' -prune -exec rm -rf {} + \
+    && echo "remaining setuptools refs:" \
+    && (grep -rIl --exclude-dir=/opt --exclude-dir=/proc 'setuptools==70\|Version: 70.3.0' /usr/local 2>/dev/null || true)
 
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
