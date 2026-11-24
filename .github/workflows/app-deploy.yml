@@ -96,7 +96,8 @@ jobs:
           trivy image --severity HIGH,CRITICAL --ignore-unfixed --scanners vuln \
             --format json --quiet "${{ steps.meta.outputs.image }}" \
             | jq -r '.Results[] | select(.Vulnerabilities) | .Target as $t
-                | .Vulnerabilities[] | "\($t)\t\(.PkgName) \(.InstalledVersion)\t\(.PkgPath // "-")\t\(.VulnerabilityID)"'
+                | .Vulnerabilities[] | {target: $t, pkg: .PkgName, ver: .InstalledVersion,
+                    path: .PkgPath, id: .PkgIdentifier, layer: .Layer, cve: .VulnerabilityID} | tojson'
       - name: Push to Docker Hub
         run: docker push "${{ steps.meta.outputs.image }}"
 
