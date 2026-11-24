@@ -33,10 +33,13 @@ ENV PATH="/opt/venv/bin:$PATH" \
 
 # Non-root runtime user.
 RUN groupadd --system app && useradd --system --gid app --home /app app \
-    && apt-get update && apt-get install -y --no-install-recommends curl \
+    && apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    # Base image ships setuptools 70.x (CVE-2025-47273); patch the system copy too.
-    && pip install --no-cache-dir --upgrade "setuptools>=78.1.1"
+    # Base image ships setuptools 70.x (CVE-2025-47273). The runtime only uses the
+    # /opt/venv copy (patched in the builder), so drop every stale system copy.
+    && echo "stale setuptools:" && find / -xdev -iname 'setuptools-70*' -print \
+    && find / -xdev -iname 'setuptools-70*' -prune -exec rm -rf {} +
 
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
