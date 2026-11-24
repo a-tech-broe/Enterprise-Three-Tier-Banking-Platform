@@ -98,6 +98,10 @@ jobs:
             | jq -r '.Results[] | select(.Vulnerabilities) | .Target as $t
                 | .Vulnerabilities[] | {target: $t, pkg: .PkgName, ver: .InstalledVersion,
                     path: .PkgPath, id: .PkgIdentifier, layer: .Layer, cve: .VulnerabilityID} | tojson'
+          docker inspect --format '{{json .RootFS.Layers}}' "${{ steps.meta.outputs.image }}"
+          docker history --no-trunc --format '{{.CreatedBy}}' "${{ steps.meta.outputs.image }}" | cut -c1-160
+          docker run --rm --entrypoint sh "${{ steps.meta.outputs.image }}" -c \
+            "find / -xdev -iname '*setuptools*' -not -path '/opt/venv/*' 2>/dev/null | head -20"
       - name: Push to Docker Hub
         run: docker push "${{ steps.meta.outputs.image }}"
 
