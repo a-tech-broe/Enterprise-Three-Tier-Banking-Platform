@@ -20,7 +20,7 @@ ENV PIP_NO_CACHE_DIR=1 \
 WORKDIR /build
 COPY requirements.txt .
 RUN python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install --upgrade pip "setuptools>=78.1.1" \
     && /opt/venv/bin/pip install -r requirements.txt
 
 # ---------- runtime ----------
@@ -34,7 +34,9 @@ ENV PATH="/opt/venv/bin:$PATH" \
 # Non-root runtime user.
 RUN groupadd --system app && useradd --system --gid app --home /app app \
     && apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    # Base image ships setuptools 70.x (CVE-2025-47273); patch the system copy too.
+    && pip install --no-cache-dir --upgrade "setuptools>=78.1.1"
 
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
