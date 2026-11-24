@@ -90,6 +90,13 @@ jobs:
         run: |
           trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed \
             --scanners vuln --format table "${{ steps.meta.outputs.image }}"
+      - name: Trivy findings with file paths (on failure)
+        if: failure()
+        run: |
+          trivy image --severity HIGH,CRITICAL --ignore-unfixed --scanners vuln \
+            --format json --quiet "${{ steps.meta.outputs.image }}" \
+            | jq -r '.Results[] | select(.Vulnerabilities) | .Target as $t
+                | .Vulnerabilities[] | "\($t)\t\(.PkgName) \(.InstalledVersion)\t\(.PkgPath // "-")\t\(.VulnerabilityID)"'
       - name: Push to Docker Hub
         run: docker push "${{ steps.meta.outputs.image }}"
 
